@@ -1,206 +1,343 @@
-"use client"
+
+'use client';
 
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
-import { getAvailableSlotsForDate, isDayDisabled, TimeSlot } from '@/lib/schedule';
-import { Calendar } from '@/components/ui/calendar';
-import { SlotPicker } from '@/components/SlotPicker';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
+import { useUser, useFirestore, useCollection } from '@/firebase';
+import { 
+  collection, 
+  query, 
+  where, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import trLocale from '@fullcalendar/core/locales/tr';
+import { 
+  Plus, 
+  Calendar as CalendarIcon, 
+  Settings, 
+  LogOut, 
+  Link as LinkIcon,
+  ChevronLeft,
+  ChevronRight,
+  Menu
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { generateBookingConfirmation } from '@/ai/flows/booking-confirmation-generator';
-import { CalendarDays, User, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import Link from 'next/link';
 
-export default function BookingPage() {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [slots, setSlots] = useState<TimeSlot[]>([]);
-  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [studentName, setStudentName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [bookingResult, setBookingResult] = useState<{ message: string; date: string; slot: TimeSlot } | null>(null);
+export default function DashboardPage() {
+  const { user, isUserLoading } = useUser();
+  const db = useFirestore();
+  const router = useRouter();
   const { toast } = useToast();
 
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [eventForm, setEventForm] = useState({
+    title: '',
+    description: '',
+    start: '',
+    end: '',
+    type: 'personal',
+    color: '#3b82f6'
+  });
+
+  // Redirect if not logged in
   useEffect(() => {
-    if (selectedDate) {
-      setSlots(getAvailableSlotsForDate(selectedDate));
-      setSelectedSlot(null);
-
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const q = query(collection(db, 'appointments'), where('date', '==', dateStr));
-
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const booked = snapshot.docs.map(doc => doc.data().startTime);
-        setBookedSlots(booked);
-      });
-
-      return () => unsubscribe();
+    if (!isUserLoading && !user) {
+      router.push('/login');
     }
-  }, [selectedDate]);
+  }, [user, isUserLoading, router]);
 
-  const handleBooking = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDate || !selectedSlot || !studentName.trim()) {
-      toast({ title: "Hata", description: "Lütfen tüm alanları doldurun.", variant: "destructive" });
-      return;
-    }
+  const eventsQuery = React.useMemo(() => {
+    if (!user) return null;
+    return query(collection(db, 'users', user.uid, 'events'));
+  }, [db, user]);
 
-    setIsSubmitting(true);
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+  const { data: eventsData, isLoading: isEventsLoading } = useCollection(eventsQuery as any);
+
+  const calendarEvents = eventsData?.map(event => ({
+    id: event.id,
+    title: event.title,
+    start: event.start,
+    end: event.end,
+    backgroundColor: event.color,
+    extendedProps: { ...event }
+  })) || [];
+
+  const handleDateSelect = (selectInfo: any) => {
+    setSelectedEvent(null);
+    setEventForm({
+      title: '',
+      description: '',
+      start: selectInfo.startStr.slice(0, 16),
+      end: selectInfo.endStr.slice(0, 16),
+      type: 'personal',
+      color: '#3b82f6'
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleEventClick = (clickInfo: any) => {
+    const event = clickInfo.event.extendedProps;
+    setSelectedEvent(event);
+    setEventForm({
+      title: event.title,
+      description: event.description || '',
+      start: event.start,
+      end: event.end,
+      type: event.type,
+      color: event.color
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleSaveEvent = async () => {
+    if (!user) return;
 
     try {
-      await addDoc(collection(db, 'appointments'), {
-        studentName,
-        date: dateStr,
-        startTime: selectedSlot.startTime,
-        endTime: selectedSlot.endTime,
-        createdAt: serverTimestamp(),
-      });
+      const eventData = {
+        ...eventForm,
+        userId: user.uid,
+        updatedAt: serverTimestamp(),
+      };
 
-      const aiResponse = await generateBookingConfirmation({
-        studentName,
-        date: dateStr,
-        startTime: selectedSlot.startTime,
-        endTime: selectedSlot.endTime
-      });
-
-      setBookingResult({
-        message: aiResponse.message,
-        date: dateStr,
-        slot: selectedSlot
-      });
-      
-      toast({ title: "Başarılı", description: "Randevunuz oluşturuldu." });
+      if (selectedEvent) {
+        await updateDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id), eventData);
+        toast({ title: 'Başarılı', description: 'Etkinlik güncellendi.' });
+      } else {
+        await addDoc(collection(db, 'users', user.uid, 'events'), {
+          ...eventData,
+          createdAt: serverTimestamp(),
+        });
+        toast({ title: 'Başarılı', description: 'Etkinlik oluşturuldu.' });
+      }
+      setIsEventModalOpen(false);
     } catch (error) {
-      console.error("Booking error:", error);
-      toast({ title: "Hata", description: "Randevu oluşturulamadı. Lütfen tekrar deneyin.", variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
+      toast({ variant: 'destructive', title: 'Hata', description: 'İşlem başarısız oldu.' });
     }
   };
 
-  if (bookingResult) {
+  const handleDeleteEvent = async () => {
+    if (!user || !selectedEvent) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id));
+      toast({ title: 'Silindi', description: 'Etkinlik kaldırıldı.' });
+      setIsEventModalOpen(false);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Hata', description: 'Silme işlemi başarısız.' });
+    }
+  };
+
+  if (isUserLoading || !user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-6 animate-in fade-in zoom-in duration-500">
-        <Card className="max-w-md w-full border-2 border-primary/20 shadow-2xl bg-white/90 backdrop-blur">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto bg-green-100 p-3 rounded-full w-fit">
-              <CheckCircle2 className="w-12 h-12 text-green-600" />
-            </div>
-            <CardTitle className="text-3xl font-bold text-primary">Harika!</CardTitle>
-            <CardDescription className="text-base text-balance whitespace-pre-line leading-relaxed">
-              {bookingResult.message}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center pb-8">
-            <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
-              Yeni Randevu Al
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="h-screen flex items-center justify-center bg-muted/30">
+        <div className="flex flex-col items-center gap-4">
+          <CalendarIcon className="w-12 h-12 text-primary animate-pulse" />
+          <p className="text-muted-foreground font-medium">Yükleniyor...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <main className="max-w-2xl mx-auto p-4 md:py-12 space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-      <header className="text-center space-y-2">
-        <h1 className="text-3xl md:text-4xl font-bold text-primary tracking-tight">
-          Sintia Hoca Danışmanlık
-        </h1>
-        <p className="text-muted-foreground text-lg">Rehberlik Randevu Sistemi</p>
+    <div className="flex flex-col h-screen bg-background">
+      {/* Header */}
+      <header className="h-16 border-b flex items-center justify-between px-6 bg-white shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-8 h-8 text-primary" />
+            <h1 className="text-xl font-bold tracking-tight hidden sm:block">Randevu Hoca</h1>
+          </div>
+          <nav className="hidden md:flex items-center gap-1 ml-8">
+            <Button variant="ghost" asChild>
+              <Link href="/">Takvim</Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link href="/booking-links">Paylaşım Linkleri</Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link href="/settings">Ayarlar</Link>
+            </Button>
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <Button variant="default" size="sm" className="hidden sm:flex" onClick={() => handleDateSelect({ startStr: new Date().toISOString(), endStr: new Date().toISOString() })}>
+            <Plus className="w-4 h-4 mr-2" />
+            Yeni Oluştur
+          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={user.photoURL || ''} alt={user.displayName || ''} />
+                  <AvatarFallback>{user.displayName?.charAt(0) || 'U'}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <div className="flex flex-col space-y-1 p-2">
+                <p className="text-sm font-medium leading-none">{user.displayName}</p>
+                <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Ayarlar</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/booking-links">
+                  <LinkIcon className="mr-2 h-4 w-4" />
+                  <span>Randevu Linkleri</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive" onClick={() => useAuth().signOut()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Çıkış Yap</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </header>
 
-      <section className="space-y-6">
-        <Card className="shadow-lg border-none">
-          <CardHeader className="border-b bg-primary/5 py-4">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-primary" />
-              Adım 1: Tarih Seçin
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 flex justify-center">
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              disabled={isDayDisabled}
-              locale={tr}
-              className="p-4"
-            />
-          </CardContent>
-        </Card>
+      {/* Main Content */}
+      <main className="flex-1 overflow-hidden p-4 sm:p-6 bg-muted/10">
+        <div className="h-full bg-white rounded-xl border shadow-sm overflow-hidden p-4">
+          <FullCalendar
+            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            initialView="timeGridWeek"
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            }}
+            locale={trLocale}
+            editable={true}
+            selectable={true}
+            selectMirror={true}
+            dayMaxEvents={true}
+            weekends={true}
+            events={calendarEvents}
+            select={handleDateSelect}
+            eventClick={handleEventClick}
+            height="100%"
+            slotMinTime="07:00:00"
+            slotMaxTime="22:00:00"
+            nowIndicator={true}
+          />
+        </div>
+      </main>
 
-        {selectedDate && (
-          <Card className="shadow-lg border-none animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <CardHeader className="border-b bg-primary/5 py-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Loader2 className={cn("w-5 h-5 text-primary", isSubmitting && "animate-spin")} />
-                Adım 2: Saat Dilimi Seçin
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <SlotPicker
-                slots={slots}
-                bookedSlots={bookedSlots}
-                selectedSlot={selectedSlot}
-                onSelect={setSelectedSlot}
+      {/* Event Modal */}
+      <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{selectedEvent ? 'Etkinliği Düzenle' : 'Yeni Etkinlik'}</DialogTitle>
+            <DialogDescription>Takviminize yeni bir giriş yapın veya mevcut olanı güncelleyin.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="title">Başlık</Label>
+              <Input 
+                id="title" 
+                value={eventForm.title} 
+                onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
+                placeholder="Toplantı, Hatırlatıcı, vb."
               />
-            </CardContent>
-          </Card>
-        )}
-
-        {selectedSlot && (
-          <Card className="shadow-lg border-none animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <CardHeader className="border-b bg-primary/5 py-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <User className="w-5 h-5 text-primary" />
-                Adım 3: İletişim Bilgileri
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <form onSubmit={handleBooking} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-sm font-medium">Adınız Soyadınız</Label>
-                  <Input
-                    id="name"
-                    placeholder="Örn: Ahmet Yılmaz"
-                    value={studentName}
-                    onChange={(e) => setStudentName(e.target.value)}
-                    required
-                    className="h-12 text-lg"
-                    autoComplete="name"
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full h-14 text-lg font-bold transition-all hover:gap-4 flex items-center justify-center gap-2"
-                  disabled={isSubmitting || !studentName.trim()}
-                >
-                  {isSubmitting ? (
-                    <Loader2 className="animate-spin w-6 h-6" />
-                  ) : (
-                    <>
-                      Randevu Al
-                      <ArrowRight className="w-5 h-5" />
-                    </>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-      </section>
-
-      <footer className="text-center py-8 text-muted-foreground/60 text-sm">
-        © {new Date().getFullYear()} Sintia Hoca Danışmanlık. Tüm hakları saklıdır.
-      </footer>
-    </main>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="start">Başlangıç</Label>
+                <Input 
+                  id="start" 
+                  type="datetime-local" 
+                  value={eventForm.start} 
+                  onChange={(e) => setEventForm({...eventForm, start: e.target.value})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="end">Bitiş</Label>
+                <Input 
+                  id="end" 
+                  type="datetime-local" 
+                  value={eventForm.end} 
+                  onChange={(e) => setEventForm({...eventForm, end: e.target.value})}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="type">Tür</Label>
+              <Select value={eventForm.type} onValueChange={(v) => setEventForm({...eventForm, type: v})}>
+                <SelectTrigger id="type">
+                  <SelectValue placeholder="Tür seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="personal">Kişisel</SelectItem>
+                  <SelectItem value="meeting">Toplantı</SelectItem>
+                  <SelectItem value="reminder">Hatırlatıcı</SelectItem>
+                  <SelectItem value="booking">Randevu</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Açıklama</Label>
+              <Textarea 
+                id="description" 
+                value={eventForm.description} 
+                onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            {selectedEvent && (
+              <Button variant="destructive" onClick={handleDeleteEvent} className="sm:mr-auto">
+                Sil
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setIsEventModalOpen(false)}>İptal</Button>
+            <Button onClick={handleSaveEvent}>Kaydet</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

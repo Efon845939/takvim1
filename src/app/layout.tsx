@@ -1,25 +1,29 @@
-import type {Metadata} from 'next';
+
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
+import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { Toaster } from '@/components/ui/toaster';
+
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Randevu Hoca - Sintia Hoca Danışmanlık',
-  description: 'Sintia Hoca ile rehberlik randevusu alın.',
+  title: 'Randevu Hoca | Akıllı Takvim ve Planlama',
+  description: 'SaaS tabanlı akıllı takvim ve randevu yönetim sistemi.',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="tr">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
-      </head>
-      <body className="font-body antialiased bg-[#E4ECF4] min-h-screen">
-        {children}
+      <body className={inter.className}>
+        <FirebaseClientProvider>
+          {children}
+          <Toaster />
+        </FirebaseClientProvider>
       </body>
     </html>
   );
