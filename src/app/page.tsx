@@ -7,7 +7,6 @@ import { useUser, useFirestore, useCollection } from '@/firebase';
 import { 
   collection, 
   query, 
-  where, 
   addDoc, 
   updateDoc, 
   deleteDoc, 
@@ -25,9 +24,8 @@ import {
   Settings, 
   LogOut, 
   Link as LinkIcon,
-  ChevronLeft,
-  ChevronRight,
-  Menu
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -58,10 +56,13 @@ import {
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/firebase';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
+  const auth = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -76,19 +77,12 @@ export default function DashboardPage() {
     color: '#3b82f6'
   });
 
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push('/login');
-    }
-  }, [user, isUserLoading, router]);
-
   const eventsQuery = React.useMemo(() => {
     if (!user) return null;
     return query(collection(db, 'users', user.uid, 'events'));
   }, [db, user]);
 
-  const { data: eventsData, isLoading: isEventsLoading } = useCollection(eventsQuery as any);
+  const { data: eventsData } = useCollection(eventsQuery as any);
 
   const calendarEvents = eventsData?.map(event => ({
     id: event.id,
@@ -127,7 +121,16 @@ export default function DashboardPage() {
   };
 
   const handleSaveEvent = async () => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: 'Giriş Gerekli',
+        description: 'Planlarınızı kaydetmek ve yönetmek için lütfen hesap oluşturun veya giriş yapın.',
+        action: (
+          <Button variant="outline" size="sm" onClick={() => router.push('/login')}>Giriş Yap</Button>
+        ),
+      });
+      return;
+    }
 
     try {
       const eventData = {
@@ -163,7 +166,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (isUserLoading || !user) {
+  if (isUserLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-muted/30">
         <div className="flex flex-col items-center gap-4">
@@ -177,71 +180,101 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="h-16 border-b flex items-center justify-between px-6 bg-white shrink-0">
+      <header className="h-16 border-b flex items-center justify-between px-6 bg-white shrink-0 shadow-sm z-10">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-8 h-8 text-primary" />
-            <h1 className="text-xl font-bold tracking-tight hidden sm:block">Randevu Hoca</h1>
+            <h1 className="text-xl font-bold tracking-tight hidden sm:block text-slate-800">Randevu Hoca</h1>
           </div>
-          <nav className="hidden md:flex items-center gap-1 ml-8">
-            <Button variant="ghost" asChild>
-              <Link href="/">Takvim</Link>
-            </Button>
-            <Button variant="ghost" asChild>
-              <Link href="/booking-links">Paylaşım Linkleri</Link>
-            </Button>
-            <Button variant="ghost" asChild>
-              <Link href="/settings">Ayarlar</Link>
-            </Button>
-          </nav>
+          {user && (
+            <nav className="hidden md:flex items-center gap-1 ml-8">
+              <Button variant="ghost" className="text-sm" asChild>
+                <Link href="/">Takvim</Link>
+              </Button>
+              <Button variant="ghost" className="text-sm" asChild>
+                <Link href="/booking-links">Paylaşım Linkleri</Link>
+              </Button>
+              <Button variant="ghost" className="text-sm" asChild>
+                <Link href="/settings">Ayarlar</Link>
+              </Button>
+            </nav>
+          )}
         </div>
 
-        <div className="flex items-center gap-4">
-          <Button variant="default" size="sm" className="hidden sm:flex" onClick={() => handleDateSelect({ startStr: new Date().toISOString(), endStr: new Date().toISOString() })}>
-            <Plus className="w-4 h-4 mr-2" />
-            Yeni Oluştur
-          </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={user.photoURL || ''} alt={user.displayName || ''} />
-                  <AvatarFallback>{user.displayName?.charAt(0) || 'U'}</AvatarFallback>
-                </Avatar>
+        <div className="flex items-center gap-3">
+          {!user ? (
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/login">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Giriş Yap
+                </Link>
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
-              <div className="flex flex-col space-y-1 p-2">
-                <p className="text-sm font-medium leading-none">{user.displayName}</p>
-                <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/settings">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Ayarlar</span>
+              <Button variant="default" size="sm" asChild>
+                <Link href="/register">
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Kayıt Ol
                 </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/booking-links">
-                  <LinkIcon className="mr-2 h-4 w-4" />
-                  <span>Randevu Linkleri</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" onClick={() => useAuth().signOut()}>
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Çıkış Yap</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button variant="default" size="sm" className="hidden sm:flex" onClick={() => handleDateSelect({ startStr: new Date().toISOString(), endStr: new Date().toISOString() })}>
+                <Plus className="w-4 h-4 mr-2" />
+                Yeni Plan
+              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-full border">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={user.photoURL || ''} alt={user.displayName || ''} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                        {user.displayName?.charAt(0) || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <div className="flex flex-col space-y-1 p-2">
+                    <p className="text-sm font-semibold leading-none">{user.displayName}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings">
+                      <Settings className="mr-2 h-4 w-4" />
+                      <span>Ayarlar</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/booking-links">
+                      <LinkIcon className="mr-2 h-4 w-4" />
+                      <span>Randevu Linkleri</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive focus:bg-destructive/10" onClick={() => auth.signOut()}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Çıkış Yap</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-hidden p-4 sm:p-6 bg-muted/10">
-        <div className="h-full bg-white rounded-xl border shadow-sm overflow-hidden p-4">
+      <main className="flex-1 overflow-hidden p-4 sm:p-6 bg-[#f8fafc]">
+        <div className="h-full bg-white rounded-xl border shadow-sm overflow-hidden p-4 relative">
+          {!user && (
+            <div className="absolute inset-x-0 top-0 z-[5] p-4 flex justify-center">
+              <div className="bg-primary/90 text-white px-6 py-2 rounded-full text-sm font-medium shadow-lg animate-bounce">
+                Planlarınızı kaydetmek için lütfen giriş yapın
+              </div>
+            </div>
+          )}
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="timeGridWeek"
@@ -251,7 +284,7 @@ export default function DashboardPage() {
               right: 'dayGridMonth,timeGridWeek,timeGridDay'
             }}
             locale={trLocale}
-            editable={true}
+            editable={!!user}
             selectable={true}
             selectMirror={true}
             dayMaxEvents={true}
@@ -271,8 +304,12 @@ export default function DashboardPage() {
       <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{selectedEvent ? 'Etkinliği Düzenle' : 'Yeni Etkinlik'}</DialogTitle>
-            <DialogDescription>Takviminize yeni bir giriş yapın veya mevcut olanı güncelleyin.</DialogDescription>
+            <DialogTitle>{selectedEvent ? 'Planı Düzenle' : 'Yeni Plan Oluştur'}</DialogTitle>
+            <DialogDescription>
+              {!user 
+                ? 'Misafir modunda plan oluşturabilirsiniz, ancak kaydetmek için giriş yapmalısınız.' 
+                : 'Takviminize yeni bir giriş yapın veya mevcut olanı güncelleyin.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -281,7 +318,7 @@ export default function DashboardPage() {
                 id="title" 
                 value={eventForm.title} 
                 onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
-                placeholder="Toplantı, Hatırlatıcı, vb."
+                placeholder="Örn: Proje Toplantısı"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -324,17 +361,20 @@ export default function DashboardPage() {
                 id="description" 
                 value={eventForm.description} 
                 onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
+                placeholder="Ek detaylar ekleyin..."
               />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
-            {selectedEvent && (
+            {selectedEvent && user && (
               <Button variant="destructive" onClick={handleDeleteEvent} className="sm:mr-auto">
                 Sil
               </Button>
             )}
             <Button variant="outline" onClick={() => setIsEventModalOpen(false)}>İptal</Button>
-            <Button onClick={handleSaveEvent}>Kaydet</Button>
+            <Button onClick={handleSaveEvent}>
+              {!user ? 'Giriş Yap ve Kaydet' : 'Kaydet'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
