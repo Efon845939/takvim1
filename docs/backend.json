@@ -1,0 +1,398 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents an authenticated user of the scheduling system who manages their calendar, availability, and booking links.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address, used for authentication and contact.",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's preferred display name."
+        },
+        "timezone": {
+          "type": "string",
+          "description": "The user's configured timezone (e.g., 'America/New_York') for accurate event scheduling and availability calculations."
+        },
+        "region": {
+          "type": "string",
+          "description": "The user's selected country or region, primarily used for local holiday integration."
+        },
+        "workingHours": {
+          "type": "array",
+          "description": "An array defining the user's availability and working intervals for each day of the week, allowing for multiple time slots per day.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the user account was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the user account was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "displayName",
+        "timezone",
+        "workingHours",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Event": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Event",
+      "type": "object",
+      "description": "Represents a calendar event in a user's private calendar, which can be personal, a meeting, a reminder, a booking, or a holiday.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Event entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who owns this event. (Relationship: User 1:N Event)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title or subject of the event."
+        },
+        "description": {
+          "type": "string",
+          "description": "An optional detailed description for the event."
+        },
+        "start": {
+          "type": "string",
+          "description": "The start date and time of the event in ISO 8601 format.",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "description": "The end date and time of the event in ISO 8601 format.",
+          "format": "date-time"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "The timezone in which the event's start and end times are defined."
+        },
+        "type": {
+          "type": "string",
+          "description": "The classification of the event (e.g., personal, meeting, a booking from a link, or a holiday).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "type": "string",
+          "description": "Indicates how the event was created or originated (e.g., manually by user, from a booking link, or from a holiday API).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "color": {
+          "type": "string",
+          "description": "A color identifier (e.g., hex code or category name) for UI display."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the event was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the event was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "start",
+        "end",
+        "timezone",
+        "type",
+        "source",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "BookingLink": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "BookingLink",
+      "type": "object",
+      "description": "Represents a configurable public link created by a user, allowing invitees to book appointments based on specific rules.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the BookingLink entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who created this booking link. (Relationship: User 1:N BookingLink)"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title displayed on the public booking page."
+        },
+        "description": {
+          "type": "string",
+          "description": "An optional description displayed on the public booking page."
+        },
+        "mode": {
+          "type": "string",
+          "description": "The booking mode: 'autoSoonest' for immediate next available slot, or 'manual' for invitee to choose.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "durationMinutes": {
+          "type": "number",
+          "description": "The fixed duration of each bookable slot in minutes."
+        },
+        "bufferBeforeMinutes": {
+          "type": "number",
+          "description": "Optional buffer time in minutes required before each booking."
+        },
+        "bufferAfterMinutes": {
+          "type": "number",
+          "description": "Optional buffer time in minutes required after each booking."
+        },
+        "timeFrame": {
+          "type": "string",
+          "description": "Defines the temporal window for available booking slots.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "customTimeFrameStart": {
+          "type": "string",
+          "description": "The start date for a custom booking time frame, applicable when 'timeFrame' is 'custom'.",
+          "format": "date"
+        },
+        "customTimeFrameEnd": {
+          "type": "string",
+          "description": "The end date for a custom booking time frame, applicable when 'timeFrame' is 'custom'.",
+          "format": "date"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Indicates whether the booking link is currently active and usable."
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "Optional timestamp when the booking link will expire and become inactive.",
+          "format": "date-time"
+        },
+        "maxBookingsPerDay": {
+          "type": "number",
+          "description": "Optional maximum number of bookings allowed per day using this link."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the booking link was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the booking link was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "mode",
+        "durationMinutes",
+        "bufferBeforeMinutes",
+        "bufferAfterMinutes",
+        "timeFrame",
+        "active",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Booking": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Booking",
+      "type": "object",
+      "description": "Represents a confirmed appointment booked by an invitee through a public booking link on a host's calendar.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Booking entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User (host) for whom this booking was made. (Relationship: User 1:N Booking)"
+        },
+        "linkId": {
+          "type": "string",
+          "description": "Reference to the BookingLink through which this booking was created. (Relationship: BookingLink 1:N Booking)"
+        },
+        "inviteeName": {
+          "type": "string",
+          "description": "The full name of the invitee who made the booking."
+        },
+        "inviteeEmail": {
+          "type": "string",
+          "description": "Optional email address of the invitee.",
+          "format": "email"
+        },
+        "inviteeNote": {
+          "type": "string",
+          "description": "Optional notes provided by the invitee during booking."
+        },
+        "start": {
+          "type": "string",
+          "description": "The start date and time of the booked appointment in ISO 8601 format.",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "description": "The end date and time of the booked appointment in ISO 8601 format.",
+          "format": "date-time"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "The timezone of the host at the time the booking was made."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the booking (e.g., confirmed, cancelled).",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "type": "string",
+          "description": "The source from which the booking originated, typically a booking link.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the booking was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the booking was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "linkId",
+        "inviteeName",
+        "start",
+        "end",
+        "timezone",
+        "status",
+        "source",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile, preferences, timezone, and working hours. This document is private to the authenticated user (request.auth.uid == userId)."
+        }
+      },
+      {
+        "path": "/users/{userId}/events/{eventId}",
+        "definition": {
+          "entityName": "Event",
+          "schema": {
+            "$ref": "#/backend/entities/Event"
+          },
+          "description": "Contains all private calendar events (personal, meetings, reminders, holidays, and confirmed bookings). This collection is private to the authenticated user (request.auth.uid == userId). No public read access to this collection, ensuring privacy.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who owns the event."
+            },
+            {
+              "name": "eventId",
+              "description": "The unique identifier for the event."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/bookingLinks/{linkId}",
+        "definition": {
+          "entityName": "BookingLink",
+          "schema": {
+            "$ref": "#/backend/entities/BookingLink"
+          },
+          "description": "Stores configurations for public booking links. This collection is readable by the owner (request.auth.uid == userId). For public access, specific fields (active, expiresAt, title, description, durationMinutes, bufferBeforeMinutes, bufferAfterMinutes, timeFrame, customTimeFrameStart, customTimeFrameEnd, maxBookingsPerDay) are publicly readable (if active and not expired) to render the public booking page. Additionally, hostDisplayName, hostTimezone, and hostWorkingHours are denormalized into this document for availability calculation context without requiring a get() on the parent User document by unauthenticated users.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user who created this booking link."
+            },
+            {
+              "name": "linkId",
+              "description": "The unique identifier for the booking link."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/bookings/{bookingId}",
+        "definition": {
+          "entityName": "Booking",
+          "schema": {
+            "$ref": "#/backend/entities/Booking"
+          },
+          "description": "Records details of confirmed appointments made via public booking links. This collection is private to the owner (request.auth.uid == userId). It also stores sensitive invitee information. Public write access is allowed only via a secure Cloud Function (or very strict rules that prevent arbitrary writes and check slot availability). This document corresponds to an Event of type: 'booking' in the /users/{userId}/events subcollection.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the host user for whom this booking was made."
+            },
+            {
+              "name": "bookingId",
+              "description": "The unique identifier for the confirmed booking."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The recommended Firestore structure for the Smart Calendar & Scheduling SaaS prioritizes robust security, scalability, and adherence to Firebase's best practices, especially Authorization Independence and QAPs. The core principle is multi-tenancy achieved through user-specific subcollections under a top-level `users` collection. Each authenticated user (`request.auth.uid`) owns and manages their data within `/users/{userId}` and its subcollections.Authorization Independence via Denormalization:To achieve Authorization Independence, particularly for public booking pages which are accessed by unauthenticated users, critical host information is denormalized. The `BookingLink` document (at `/users/{userId}/bookingLinks/{linkId}`) will include denormalized fields from the host's `User` profile, specifically `hostDisplayName`, `hostTimezone`, and `hostWorkingHours`. This allows an unauthenticated user to retrieve all necessary context to display the booking page and understand the host's general availability rules (e.g., working hours) from a *single `get()` operation on the `BookingLink` document*, without requiring a `get()` on the parent `User` document or any other collection. This prevents complex hierarchical rule dependencies and allows for atomic reads for public access.Support for QAPs (Queries Are Not Filters):1.  Private Data for Authenticated Users: For authenticated users accessing their `events`, `bookingLinks`, and `bookings` subcollections (`/users/{userId}/events`, `/users/{userId}/bookingLinks`, `/users/{userId}/bookings`), security rules will explicitly check `request.auth.uid == userId`. This ensures that `list` queries within these subcollections are naturally filtered by the user's `uid`, thus satisfying QAPs for private data access. Users can only retrieve data they are authorized to see.2.  Public Booking Page Availability: The most challenging aspect is ensuring public users can determine slot availability without reading private event data. To strictly adhere to the mandate \"public users must never read all private events\" while still allowing \"respect working hours, existing events, busy blocks\", the application will leverage **server-side logic (Firebase Cloud Functions)** for availability calculation and booking creation. When an unauthenticated invitee accesses a public booking page:    *   They perform a `get()` on `/users/{userId}/bookingLinks/{linkId}`. This read is allowed by security rules only for specific, non-sensitive fields and if the link is active/not expired. The denormalized `hostDisplayName`, `hostTimezone`, and `hostWorkingHours` are read here.    *   To get available slots (considering *all* host events and busy times), the client will invoke a **Firebase Cloud Function**. This function, executing with elevated administrative privileges, can securely read the host's `User` document (for their latest `workingHours`, `timezone`) and *all* `Event` documents (`/users/{userId}/events`) and `Booking` documents (`/users/{userId}/bookings`) for that specific `userId`. It then performs the complex slot calculation logic on the server and returns *only the available slots* to the public client. This way, the client never performs a `list` operation on sensitive collections, and never receives private event details, fully upholding QAPs and data privacy.    *   Booking Creation: When an invitee confirms a slot, the booking request is also routed through the Cloud Function. The function performs a final atomic availability check and then securely creates the `Booking` document in `/users/{userId}/bookings/{bookingId}` and a corresponding `Event` document in `/users/{userId}/events/{eventId}`. This prevents double-booking and unauthorized writes by unauthenticated users, further reinforcing QAPs for write operations."
+  }
+}
