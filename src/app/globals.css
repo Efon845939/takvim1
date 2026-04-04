@@ -5,7 +5,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 210 20% 98%;
     --foreground: 224 71.4% 4.1%;
     --card: 0 0% 100%;
     --card-foreground: 224 71.4% 4.1%;
@@ -37,27 +37,78 @@
   }
 }
 
-/* FullCalendar Customization */
+/* FullCalendar Customization for Google Calendar Look */
 .fc {
-  @apply font-sans;
+  @apply font-sans border-none !important;
+  --fc-border-color: #e2e8f0;
+  --fc-today-bg-color: transparent;
 }
 
-.fc-toolbar-title {
-  @apply text-xl font-bold !important;
+.fc .fc-toolbar {
+  @apply hidden !important; /* We use our custom header */
 }
 
-.fc-button-primary {
-  @apply bg-primary border-primary hover:bg-primary/90 hover:border-primary/90 !important;
+.fc-theme-standard td, .fc-theme-standard th {
+  @apply border-slate-100 !important;
 }
 
-.fc-event {
-  @apply rounded-md px-1 py-0.5 border-none shadow-sm cursor-pointer hover:opacity-90 transition-opacity !important;
-}
-
-.fc-daygrid-day-number {
-  @apply text-sm text-muted-foreground !important;
+.fc-col-header-cell {
+  @apply bg-white py-3 border-b border-slate-200 !important;
 }
 
 .fc-col-header-cell-cushion {
-  @apply text-sm font-semibold py-2 !important;
+  @apply text-[11px] font-bold uppercase tracking-wider text-slate-500 no-underline !important;
+}
+
+.fc-timegrid-slot {
+  @apply h-12 !important; /* More vertical space */
+}
+
+.fc-timegrid-slot-label-cushion {
+  @apply text-[11px] text-slate-400 font-medium !important;
+}
+
+.fc-v-event {
+  @apply rounded-md border-none px-1.5 py-1 shadow-sm transition-transform active:scale-95 !important;
+}
+
+.fc-event-title {
+  @apply text-[12px] font-semibold !important;
+}
+
+.fc-timegrid-now-indicator-line {
+  @apply border-red-500 border-t-2 !important;
+}
+
+.fc-timegrid-now-indicator-arrow {
+  @apply border-red-500 !important;
+  left: -1px !important;
+  border-width: 5px 0 5px 6px !important;
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+}
+
+.fc-day-today {
+  @apply bg-blue-50/30 !important;
+}
+
+.fc-scrollgrid {
+  @apply border-none !important;
+}
+
+.fc-daygrid-day-number {
+  @apply p-2 text-sm text-slate-500 no-underline !important;
+}
+
+.fc-daygrid-day.fc-day-today .fc-daygrid-day-number {
+  @apply bg-primary text-white rounded-full w-7 h-7 flex items-center justify-center m-1 !important;
+}
+
+/* Hide scrollbar for mini calendar */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
