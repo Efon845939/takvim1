@@ -24,12 +24,11 @@ import {
   Settings, 
   LogOut, 
   Link as LinkIcon,
-  LogIn,
-  UserPlus,
   ChevronLeft,
   ChevronRight,
   Menu,
-  Check
+  Check,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -63,7 +62,6 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 export default function DashboardPage() {
@@ -196,7 +194,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Calendar Navigation
   const navigate = (direction: 'prev' | 'next' | 'today') => {
     if (!calendarRef.current) return;
     const api = calendarRef.current.getApi();
@@ -232,35 +229,41 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white overflow-hidden">
-      {/* Professional Header */}
-      <header className="h-16 border-b flex items-center justify-between px-4 bg-white z-20 shrink-0">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-500">
+    <div className="flex flex-col h-screen bg-white overflow-hidden text-slate-900">
+      {/* SaaS Header - 3 Zones */}
+      <header className="h-16 border-b flex items-center justify-between px-4 bg-white z-20 shrink-0 shadow-sm">
+        {/* Zone 1: Brand & Nav */}
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-500 hover:bg-slate-50">
             <Menu className="w-5 h-5" />
           </Button>
-          <div className="flex items-center gap-2 mr-4">
-            <CalendarIcon className="w-8 h-8 text-primary" />
-            <span className="text-xl font-semibold text-slate-700 hidden sm:inline-block tracking-tight">Takvim</span>
+          <div className="flex items-center gap-2 mr-6">
+            <CalendarIcon className="w-6 h-6 text-primary" />
+            <span className="text-xl font-bold tracking-tight text-slate-800 hidden sm:inline-block">Takvim</span>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate('today')} className="text-sm font-medium">Bugün</Button>
-            <div className="flex items-center">
-              <Button variant="ghost" size="icon" onClick={() => navigate('prev')} className="h-8 w-8 rounded-full">
+          <div className="flex items-center gap-1 ml-4">
+            <Button variant="outline" size="sm" onClick={() => navigate('today')} className="text-sm font-medium px-4 h-9">Bugün</Button>
+            <div className="flex items-center ml-1">
+              <Button variant="ghost" size="icon" onClick={() => navigate('prev')} className="h-9 w-9 rounded-full text-slate-600">
                 <ChevronLeft className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => navigate('next')} className="h-8 w-8 rounded-full">
+              <Button variant="ghost" size="icon" onClick={() => navigate('next')} className="h-9 w-9 rounded-full text-slate-600">
                 <ChevronRight className="w-5 h-5" />
               </Button>
             </div>
-            <h2 className="text-xl font-medium text-slate-700 ml-2">{viewTitle}</h2>
           </div>
         </div>
 
+        {/* Zone 2: Date Range */}
+        <div className="hidden md:block">
+          <h2 className="text-xl font-semibold text-slate-700">{viewTitle}</h2>
+        </div>
+
+        {/* Zone 3: Actions & User */}
         <div className="flex items-center gap-3">
           <Select value={activeView} onValueChange={changeView}>
-            <SelectTrigger className="w-32 h-9 bg-slate-50 border-slate-200">
+            <SelectTrigger className="w-32 h-9 bg-slate-50/50 border-slate-200 text-slate-600 font-medium">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -271,34 +274,34 @@ export default function DashboardPage() {
           </Select>
 
           {!user ? (
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/login">Giriş</Link>
+            <div className="flex items-center gap-2 ml-2">
+              <Button variant="ghost" size="sm" asChild className="text-slate-600">
+                <Link href="/login">Giriş Yap</Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/register">Kaydol</Link>
+              <Button size="sm" asChild className="bg-primary hover:bg-primary/90 rounded-full px-4">
+                <Link href="/register">Kayıt Ol</Link>
               </Button>
             </div>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-9 w-9 cursor-pointer border hover:opacity-80 transition-opacity">
+                <Avatar className="h-9 w-9 cursor-pointer border border-slate-200 hover:ring-2 hover:ring-primary/20 transition-all">
                   <AvatarImage src={user.photoURL || ''} />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold uppercase">
+                  <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
                     {user.displayName?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-1.5">
-                  <p className="text-sm font-semibold">{user.displayName}</p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
+              <DropdownMenuContent align="end" className="w-56 mt-1">
+                <div className="px-2 py-2">
+                  <p className="text-sm font-semibold text-slate-800">{user.displayName}</p>
+                  <p className="text-xs text-slate-500 truncate">{user.email}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link href="/booking-links"><LinkIcon className="w-4 h-4 mr-2" /> Paylaşım Linkleri</Link></DropdownMenuItem>
-                <DropdownMenuItem asChild><Link href="/settings"><Settings className="w-4 h-4 mr-2" /> Ayarlar</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/booking-links" className="cursor-pointer"><LinkIcon className="w-4 h-4 mr-2" /> Paylaşım Linkleri</Link></DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/settings" className="cursor-pointer"><Settings className="w-4 h-4 mr-2" /> Ayarlar</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={() => auth.signOut()}>
+                <DropdownMenuItem className="text-destructive focus:bg-destructive/5 focus:text-destructive cursor-pointer" onClick={() => auth.signOut()}>
                   <LogOut className="w-4 h-4 mr-2" /> Çıkış Yap
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -311,80 +314,100 @@ export default function DashboardPage() {
         {/* Sidebar */}
         <aside 
           className={cn(
-            "w-[280px] border-r bg-white p-4 transition-all duration-300 flex flex-col gap-6 shrink-0",
+            "w-[280px] border-r bg-white p-4 transition-all duration-300 flex flex-col gap-8 shrink-0",
             !sidebarOpen && "-ml-[280px]"
           )}
         >
           <Button 
-            className="w-full h-12 rounded-full shadow-md hover:shadow-lg transition-all text-sm font-semibold gap-3"
+            className="w-full h-12 rounded-full shadow-sm hover:shadow-md transition-all text-sm font-semibold gap-3 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
             onClick={() => handleDateSelect({ startStr: new Date().toISOString(), endStr: new Date().toISOString() })}
           >
-            <Plus className="w-6 h-6" />
+            <Plus className="w-6 h-6 text-primary" />
             Oluştur
           </Button>
 
-          <div className="px-2">
+          <div className="px-0">
             <Calendar
               mode="single"
               selected={currentDate}
               onSelect={(date) => date && goToDate(date)}
-              className="rounded-md border-none scale-95 origin-top-left"
+              className="rounded-md border-none w-full"
               locale={tr}
+              classNames={{
+                month: "space-y-4 w-full",
+                head_cell: "text-slate-400 font-medium text-[11px] uppercase w-9",
+                cell: "text-center text-sm p-0 relative focus-within:relative focus-within:z-20 w-9 h-9",
+                day: "h-8 w-8 p-0 font-normal text-slate-600 hover:bg-slate-100 rounded-full transition-colors",
+                day_selected: "bg-primary/10 text-primary font-bold hover:bg-primary/20",
+                day_today: "bg-primary text-white font-bold hover:bg-primary/90",
+              }}
             />
           </div>
 
-          <div className="space-y-4 px-2">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400">Takvimlerim</h3>
-            <div className="space-y-3">
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">Takvimlerim</h3>
+            <div className="space-y-1">
               {[
                 { id: 'personal', label: 'Kişisel', color: '#3b82f6' },
                 { id: 'booking', label: 'Randevular', color: '#10b981' },
                 { id: 'holiday', label: 'Tatiller', color: '#f59e0b' }
               ].map(filter => (
-                <label key={filter.id} className="flex items-center gap-3 cursor-pointer group">
+                <label key={filter.id} className="flex items-center gap-3 px-2 py-2 cursor-pointer group hover:bg-slate-50 rounded-md transition-colors">
                   <Checkbox 
                     checked={filters[filter.id as keyof typeof filters]} 
                     onCheckedChange={(checked) => setFilters({...filters, [filter.id]: checked})}
-                    className="border-slate-300 data-[state=checked]:border-none"
+                    className="border-slate-300 data-[state=checked]:border-none h-4 w-4"
                     style={{ backgroundColor: filters[filter.id as keyof typeof filters] ? filter.color : 'transparent' }}
                   />
-                  <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900 transition-colors">{filter.label}</span>
+                  <span className="text-sm font-medium text-slate-600 group-hover:text-slate-900">{filter.label}</span>
                 </label>
               ))}
             </div>
           </div>
         </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 bg-white relative">
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView={activeView}
-            locale={trLocale}
-            editable={!!user}
-            selectable={true}
-            selectMirror={true}
-            dayMaxEvents={true}
-            weekends={true}
-            events={calendarEvents}
-            select={handleDateSelect}
-            eventClick={handleEventClick}
-            height="100%"
-            slotMinTime="07:00:00"
-            slotMaxTime="22:00:00"
-            nowIndicator={true}
-            allDaySlot={true}
-            headerToolbar={false} /* Handled by custom header */
-          />
-          
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col bg-white relative">
           {!user && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-              <div className="bg-primary/90 text-white px-4 py-2 rounded-full text-xs font-bold shadow-lg animate-bounce">
-                Misafir Modu: Kaydetmek için Giriş Yapın
-              </div>
+            <div className="bg-slate-50 border-b px-4 py-2 flex items-center justify-center gap-2 text-xs font-medium text-slate-500">
+              <Info className="w-3.5 h-3.5 text-primary" />
+              Misafir Modu: Planlarınızı kalıcı olarak kaydetmek için giriş yapın.
             </div>
           )}
+          
+          <div className="flex-1 relative">
+            <FullCalendar
+              ref={calendarRef}
+              plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+              initialView={activeView}
+              locale={trLocale}
+              editable={!!user}
+              selectable={true}
+              selectMirror={true}
+              dayMaxEvents={true}
+              weekends={true}
+              events={calendarEvents}
+              select={handleDateSelect}
+              eventClick={handleEventClick}
+              height="100%"
+              slotMinTime="07:00:00"
+              slotMaxTime="22:00:00"
+              nowIndicator={true}
+              allDaySlot={true}
+              headerToolbar={false}
+              slotLabelFormat={{
+                hour: '2-digit',
+                minute: '2-digit',
+                omitZeroMinute: false,
+                meridiem: false
+              }}
+              eventTimeFormat={{
+                hour: '2-digit',
+                minute: '2-digit',
+                meridiem: false
+              }}
+            />
+          </div>
         </main>
       </div>
 
@@ -392,43 +415,48 @@ export default function DashboardPage() {
       <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{selectedEvent ? 'Planı Düzenle' : 'Yeni Plan Oluştur'}</DialogTitle>
-            <DialogDescription>
-              {!user && 'Giriş yapmadığınız için planlarınız kalıcı olarak kaydedilmeyecektir.'}
-            </DialogDescription>
+            <DialogTitle className="text-xl font-bold text-slate-800">{selectedEvent ? 'Planı Düzenle' : 'Yeni Plan Oluştur'}</DialogTitle>
+            {!user && (
+              <DialogDescription className="text-amber-600 font-medium">
+                Giriş yapmadığınız için planlarınız kaydedilmeyecektir.
+              </DialogDescription>
+            )}
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-5 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="title">Başlık</Label>
+              <Label htmlFor="title" className="text-slate-600 font-medium">Başlık</Label>
               <Input 
                 id="title" 
                 value={eventForm.title} 
                 onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
-                placeholder="Etkinlik adı..."
+                placeholder="Örn: Haftalık Toplantı"
+                className="focus-visible:ring-primary"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="start">Başlangıç</Label>
+                <Label htmlFor="start" className="text-slate-600 font-medium">Başlangıç</Label>
                 <Input 
                   id="start" 
                   type="datetime-local" 
                   value={eventForm.start} 
                   onChange={(e) => setEventForm({...eventForm, start: e.target.value})}
+                  className="focus-visible:ring-primary"
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="end">Bitiş</Label>
+                <Label htmlFor="end" className="text-slate-600 font-medium">Bitiş</Label>
                 <Input 
                   id="end" 
                   type="datetime-local" 
                   value={eventForm.end} 
                   onChange={(e) => setEventForm({...eventForm, end: e.target.value})}
+                  className="focus-visible:ring-primary"
                 />
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="type">Kategori</Label>
+              <Label htmlFor="type" className="text-slate-600 font-medium">Kategori</Label>
               <Select 
                 value={eventForm.type} 
                 onValueChange={(v) => {
@@ -436,7 +464,7 @@ export default function DashboardPage() {
                   setEventForm({...eventForm, type: v, color: colors[v as keyof typeof colors]});
                 }}
               >
-                <SelectTrigger id="type">
+                <SelectTrigger id="type" className="focus:ring-primary">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -449,23 +477,24 @@ export default function DashboardPage() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="description">Notlar</Label>
+              <Label htmlFor="description" className="text-slate-600 font-medium">Notlar</Label>
               <Textarea 
                 id="description" 
                 value={eventForm.description} 
                 onChange={(e) => setEventForm({...eventForm, description: e.target.value})}
-                placeholder="Açıklama..."
+                placeholder="Açıklama ekleyin..."
+                className="focus-visible:ring-primary min-h-[100px]"
               />
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 pt-2">
             {selectedEvent && user && (
-              <Button variant="ghost" onClick={handleDeleteEvent} className="text-destructive hover:text-destructive hover:bg-destructive/10 sm:mr-auto">
+              <Button variant="ghost" onClick={handleDeleteEvent} className="text-destructive hover:text-destructive hover:bg-destructive/5 sm:mr-auto">
                 Sil
               </Button>
             )}
-            <Button variant="outline" onClick={() => setIsEventModalOpen(false)}>İptal</Button>
-            <Button onClick={handleSaveEvent} className="px-8 font-semibold">
+            <Button variant="outline" onClick={() => setIsEventModalOpen(false)} className="rounded-full px-6">İptal</Button>
+            <Button onClick={handleSaveEvent} className="rounded-full px-8 font-semibold bg-primary hover:bg-primary/90">
               Kaydet
             </Button>
           </DialogFooter>
