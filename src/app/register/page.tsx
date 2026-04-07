@@ -33,11 +33,15 @@ export default function RegisterPage() {
 
       await updateProfile(user, { displayName: name });
 
+      // RBAC: Grant teacher role for specific email
+      const role = email === 'proturkgamerefe@gmail.com' ? 'teacher' : 'student';
+
       // Initialize user document
       await setDoc(doc(db, 'users', user.uid), {
         id: user.uid,
         email: user.email,
         displayName: name,
+        role: role,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         region: 'TR',
         workingHours: [
@@ -53,6 +57,7 @@ export default function RegisterPage() {
         updatedAt: serverTimestamp(),
       });
 
+      toast({ title: 'Başarılı', description: `Hoş geldiniz, ${role === 'teacher' ? 'Hocam' : name}!` });
       router.push('/');
     } catch (error: any) {
       toast({

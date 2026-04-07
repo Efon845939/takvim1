@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useCollection, useAuth, useDoc } from '@/firebase';
+import { useUser, useFirestore, useCollection, useAuth, useDoc, useMemoFirebase } from '@/firebase';
 import { 
   collection, 
   query, 
@@ -12,7 +12,8 @@ import {
   deleteDoc, 
   doc, 
   serverTimestamp,
-  where
+  where,
+  orderBy
 } from 'firebase/firestore';
 import { 
   format, 
@@ -34,7 +35,8 @@ import {
   subMonths,
   addDays as addDaysFn,
   subDays as subDaysFn,
-  isSameMonth
+  isSameMonth,
+  endOfDay
 } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { 
@@ -46,18 +48,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  Info,
   Search,
   HelpCircle,
   X,
   Check,
   Globe,
-  Bell,
-  Eye,
-  Keyboard,
-  ArrowLeft,
   QrCode,
-  ExternalLink
+  ExternalLink,
+  ArrowLeft,
+  Clock,
+  User as UserIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -104,7 +104,7 @@ export default function DashboardPage() {
   // --- STATE ---
   const [currentDate, setCurrentDate] = useState(new Date());
   const [miniCalendarMonth, setMiniCalendarMonth] = useState(new Date());
-  const [view, setView] = useState<'gün' | 'hafta' | 'ay'>('hafta');
+  const [view, setView] = useState<'gün' | 'hafta' | 'ay' | 'plan'>('hafta');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -139,8 +139,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     
-    // Auto scroll to 07:00 on load
     if (gridScrollRef.current && (view === 'hafta' || view === 'gün')) {
+      // Scroll to 07:00 (7 * 80px per hour)
       gridScrollRef.current.scrollTop = 7 * 80;
     }
     
@@ -169,40 +169,40 @@ export default function DashboardPage() {
     fetchHolidays();
   }, [currentDate]);
 
-  // --- FETCH DATA ---
-  const eventsQuery = useMemo(() => {
+  // --- MEMOIZED QUERIES ---
+  const eventsQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return query(collection(db, 'users', user.uid, 'events'));
+    return query(collection(db, 'users', user.uid, 'events'), orderBy('start', 'asc'));
   }, [db, user]);
 
-  const { data: eventsData } = useCollection(eventsQuery as any);
+  const { data: eventsData } = useCollection(eventsQuery);
   
-  const userDocRef = useMemo(() => user ? doc(db, 'users', user.uid) : null, [db, user]);
-  const { data: userData } = useDoc(userDocRef as any);
+  const userDocRef = useMemoFirebase(() => user ? doc(db, 'users', user.uid) : null, [db, user]);
+  const { data: userData } = useDoc(userDocRef);
 
-  const combinedEvents = useMemo(() => {
+  const isTeacher = userData?.role === 'teacher' || user?.email === 'proturkgamerefe@gmail.com';
+
+  const combinedEvents = React.useMemo(() => {
     const userEvents = eventsData || [];
     const holidayEvents = filters.holiday ? holidays : [];
     return [...userEvents, ...holidayEvents];
   }, [eventsData, holidays, filters.holiday]);
 
   // --- VIEW LOGIC ---
-  const weekDays = useMemo(() => {
+  const weekDays = React.useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     return Array.from({ length: 7 }, (_, i) => addDays(start, i));
   }, [currentDate]);
 
-  const monthDays = useMemo(() => {
+  const monthDays = React.useMemo(() => {
     const start = startOfMonth(currentDate);
-    const end = endOfMonth(currentDate);
     const startDay = getDay(start) === 0 ? 6 : getDay(start) - 1;
     const calendarStart = addDays(start, -startDay);
     return Array.from({ length: 42 }, (_, i) => addDays(calendarStart, i));
   }, [currentDate]);
 
-  const miniCalendarDays = useMemo(() => {
+  const miniCalendarDays = React.useMemo(() => {
     const start = startOfMonth(miniCalendarMonth);
-    const end = endOfMonth(miniCalendarMonth);
     const startDay = getDay(start) === 0 ? 6 : getDay(start) - 1;
     const calendarStart = addDays(start, -startDay);
     return Array.from({ length: 42 }, (_, i) => addDays(calendarStart, i));
@@ -282,7 +282,7 @@ export default function DashboardPage() {
     }
   };
 
-  const headerTitle = useMemo(() => {
+  const headerTitle = React.useMemo(() => {
     if (view === 'ay') return format(currentDate, 'MMMM yyyy', { locale: tr });
     if (view === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: tr });
     return `${format(weekDays[0], 'd MMMM')} – ${format(weekDays[6], 'd MMMM yyyy', { locale: tr })}`;
@@ -293,59 +293,60 @@ export default function DashboardPage() {
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-white font-sans">Yükleniyor...</div>;
 
   return (
-    <div className="h-screen w-full flex flex-col bg-white overflow-hidden text-slate-800 font-sans">
+    <div className="h-screen w-full flex flex-col bg-white dark:bg-slate-950 overflow-hidden text-slate-800 dark:text-slate-100 font-sans">
       
       {/* --- HEADER --- */}
-      <header className="h-[64px] border-b border-slate-200 flex items-center px-4 justify-between shrink-0 bg-white z-30">
+      <header className="h-[64px] border-b border-slate-200 dark:border-slate-800 flex items-center px-4 justify-between shrink-0 bg-white dark:bg-slate-900 z-30">
         <div className="flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-            <Menu className="w-5 h-5 text-slate-600" />
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <Menu className="w-5 h-5 text-slate-600 dark:text-slate-400" />
           </button>
           <div className="flex items-center gap-2 mr-4">
             <CalendarIcon className="w-8 h-8 text-blue-600" />
-            <span className="text-xl text-slate-700 font-medium tracking-tight">Takvim</span>
+            <span className="text-xl text-slate-700 dark:text-slate-200 font-medium tracking-tight">Takvim</span>
           </div>
           
           <div className="flex items-center gap-2">
             <button 
               onClick={() => navigate('today')}
-              className="px-4 py-2 border border-slate-300 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors ml-4"
+              className="px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ml-4"
             >
               Bugün
             </button>
             <div className="flex items-center gap-0.5 ml-2">
-              <button onClick={() => navigate('prev')} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <ChevronLeft className="w-5 h-5 text-slate-600" />
+              <button onClick={() => navigate('prev')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
               </button>
-              <button onClick={() => navigate('next')} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-                <ChevronRight className="w-5 h-5 text-slate-600" />
+              <button onClick={() => navigate('next')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-400" />
               </button>
             </div>
-            <h2 className="text-[20px] text-slate-700 font-normal ml-4 min-w-[200px]">
+            <h2 className="text-[20px] text-slate-700 dark:text-slate-200 font-normal ml-4 min-w-[200px]">
               {headerTitle}
             </h2>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setIsSearchOpen(true)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600">
+          <button onClick={() => setIsSearchOpen(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400">
             <Search className="w-5 h-5" />
           </button>
-          <button onClick={() => setIsInfoOpen(true)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600">
+          <button onClick={() => setIsInfoOpen(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400">
             <HelpCircle className="w-5 h-5" />
           </button>
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600">
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-600 dark:text-slate-400">
             <Settings className="w-5 h-5" />
           </button>
           
           <Select value={view} onValueChange={(v: any) => setView(v)}>
-            <SelectTrigger className="w-[100px] h-9 ml-2 bg-white border-slate-300 font-medium text-sm">
+            <SelectTrigger className="w-[100px] h-9 ml-2 bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 font-medium text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="gün">Gün</SelectItem>
               <SelectItem value="hafta">Hafta</SelectItem>
               <SelectItem value="ay">Ay</SelectItem>
+              <SelectItem value="plan">Plan</SelectItem>
             </SelectContent>
           </Select>
 
@@ -361,7 +362,7 @@ export default function DashboardPage() {
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-9 w-9 cursor-pointer ml-4 border border-slate-200">
+                <Avatar className="h-9 w-9 cursor-pointer ml-4 border border-slate-200 dark:border-slate-700">
                   <AvatarImage src={user.photoURL || ''} />
                   <AvatarFallback className="bg-primary/5 text-primary">
                     {user.displayName?.charAt(0) || 'U'}
@@ -374,12 +375,16 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setIsQrModalOpen(true)}>
-                  <QrCode className="w-4 h-4 mr-2" /> Randevu QR & Link
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/booking-links"><LinkIcon className="w-4 h-4 mr-2" /> Paylaşım Linkleri</Link>
-                </DropdownMenuItem>
+                {isTeacher && (
+                  <>
+                    <DropdownMenuItem onClick={() => setIsQrModalOpen(true)}>
+                      <QrCode className="w-4 h-4 mr-2" /> Randevu QR & Link
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/booking-links"><LinkIcon className="w-4 h-4 mr-2" /> Paylaşım Linkleri</Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
                   <Settings className="w-4 h-4 mr-2" /> Ayarlar
                 </DropdownMenuItem>
@@ -397,24 +402,37 @@ export default function DashboardPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         {sidebarOpen && (
-          <aside className="w-[280px] border-r border-slate-100 p-4 shrink-0 overflow-y-auto bg-white flex flex-col gap-6">
-            <Button 
-              className="w-full h-[48px] rounded-full shadow-sm hover:shadow-md transition-all text-sm font-medium gap-3 bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"
-              onClick={() => handleDateSelect(currentDate, new Date().getHours())}
-            >
-              <Plus className="w-6 h-6 text-blue-600" />
-              <span className="text-[14px]">Oluştur</span>
-            </Button>
+          <aside className="w-[280px] border-r border-slate-100 dark:border-slate-800 p-4 shrink-0 overflow-y-auto bg-white dark:bg-slate-900 flex flex-col gap-6">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  className="w-full h-[48px] rounded-full shadow-sm hover:shadow-md transition-all text-sm font-medium gap-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
+                >
+                  <Plus className="w-6 h-6 text-blue-600" />
+                  <span className="text-[14px]">Oluştur</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-48">
+                <DropdownMenuItem onClick={() => handleDateSelect(currentDate, new Date().getHours())}>
+                  <CalendarIcon className="w-4 h-4 mr-2" /> Etkinlik
+                </DropdownMenuItem>
+                {isTeacher && (
+                  <DropdownMenuItem onClick={() => router.push('/booking-links')}>
+                    <Clock className="w-4 h-4 mr-2" /> Randevu Programı
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Mini Calendar */}
             <div className="px-1">
               <div className="flex items-center justify-between mb-4 px-2">
-                <h3 className="text-[14px] font-medium text-slate-700">
+                <h3 className="text-[14px] font-medium text-slate-700 dark:text-slate-300">
                   {format(miniCalendarMonth, 'MMMM yyyy', { locale: tr })}
                 </h3>
                 <div className="flex gap-0.5">
-                  <button onClick={() => setMiniCalendarMonth(subMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-slate-100 rounded-full transition-colors"><ChevronLeft className="w-4 h-4" /></button>
-                  <button onClick={() => setMiniCalendarMonth(addMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-slate-100 rounded-full transition-colors"><ChevronRight className="w-4 h-4" /></button>
+                  <button onClick={() => setMiniCalendarMonth(subMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+                  <button onClick={() => setMiniCalendarMonth(addMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronRight className="w-4 h-4" /></button>
                 </div>
               </div>
               <div className="grid grid-cols-7 gap-1 text-center text-[11px] mb-2 text-slate-500 font-medium">
@@ -434,8 +452,8 @@ export default function DashboardPage() {
                       }}
                       className={cn(
                         "h-8 w-8 flex items-center justify-center rounded-full cursor-pointer transition-all m-auto text-[12px]",
-                        !isCurMonth && "text-slate-300",
-                        isCurMonth && !isDayToday && !isDaySelected && "hover:bg-slate-100 text-slate-700",
+                        !isCurMonth && "text-slate-300 dark:text-slate-700",
+                        isCurMonth && !isDayToday && !isDaySelected && "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300",
                         isDayToday && !isDaySelected && "text-blue-600 font-bold",
                         isDaySelected && "bg-blue-600 text-white font-bold"
                       )}
@@ -456,13 +474,13 @@ export default function DashboardPage() {
                     { id: 'family', label: 'Aile', color: '#8b5cf6' },
                     { id: 'booking', label: 'Randevular', color: '#10b981' }
                   ].map(filter => (
-                    <label key={filter.id} className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-slate-50 rounded-md transition-colors group">
+                    <label key={filter.id} className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md transition-colors group">
                       <Checkbox 
                         checked={filters[filter.id as keyof typeof filters]} 
                         onCheckedChange={(checked) => setFilters({...filters, [filter.id]: !!checked})}
-                        className="border-slate-300"
+                        className="border-slate-300 dark:border-slate-700"
                       />
-                      <span className="text-[13px] font-medium text-slate-700">{filter.label}</span>
+                      <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300">{filter.label}</span>
                     </label>
                   ))}
                 </div>
@@ -474,13 +492,13 @@ export default function DashboardPage() {
                   {[
                     { id: 'holiday', label: 'Bayramlar', color: '#f59e0b' }
                   ].map(filter => (
-                    <label key={filter.id} className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-slate-50 rounded-md transition-colors">
+                    <label key={filter.id} className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md transition-colors">
                       <Checkbox 
                         checked={filters[filter.id as keyof typeof filters]} 
                         onCheckedChange={(checked) => setFilters({...filters, [filter.id]: !!checked})}
-                        className="border-slate-300"
+                        className="border-slate-300 dark:border-slate-700"
                       />
-                      <span className="text-[13px] font-medium text-slate-700">{filter.label}</span>
+                      <span className="text-[13px] font-medium text-slate-700 dark:text-slate-300">{filter.label}</span>
                     </label>
                   ))}
                 </div>
@@ -490,133 +508,166 @@ export default function DashboardPage() {
         )}
 
         {/* Calendar Grid Area */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-white">
+        <main className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-950">
           {!user && (
-            <div className="bg-blue-50 py-1 px-4 text-center text-xs text-blue-600 font-medium">
+            <div className="bg-blue-50 dark:bg-blue-900/30 py-1 px-4 text-center text-xs text-blue-600 dark:text-blue-400 font-medium">
               Misafir Modu: Planlarınızı kalıcı olarak kaydetmek için giriş yapın.
             </div>
           )}
           
           {/* Day Headers */}
-          <div className="flex pr-[15px] shrink-0">
-            <div className="w-[64px] shrink-0 border-r border-transparent"></div>
-            <div className={cn(
-              "flex-1 border-b border-slate-200",
-              view === 'ay' ? "grid grid-cols-7" : view === 'gün' ? "block" : "grid grid-cols-7"
-            )}>
-              {view === 'gün' ? (
-                <div className="flex flex-col items-center justify-center py-4 gap-1 w-full">
-                  <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(currentDate) ? 'text-blue-600' : 'text-slate-500')}>
-                    {format(currentDate, 'eeee', { locale: tr })}
-                  </span>
-                  <div className={cn("w-[48px] h-[48px] flex items-center justify-center rounded-full", isToday(currentDate) ? 'bg-blue-600 text-white' : 'text-slate-800 hover:bg-slate-100')}>
-                    <span className="text-[24px] font-medium">{format(currentDate, 'd')}</span>
-                  </div>
-                </div>
-              ) : (
-                weekDays.map((day, i) => (
-                  <div key={i} className="flex flex-col items-center justify-center py-4 gap-1 border-l border-transparent">
-                    <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-blue-600' : 'text-slate-500')}>
-                      {format(day, 'eee', { locale: tr })}
+          {view !== 'plan' && (
+            <div className="flex pr-[15px] shrink-0">
+              <div className="w-[64px] shrink-0 border-r border-transparent"></div>
+              <div className={cn(
+                "flex-1 border-b border-slate-200 dark:border-slate-800",
+                view === 'ay' ? "grid grid-cols-7" : view === 'gün' ? "block" : "grid grid-cols-7"
+              )}>
+                {view === 'gün' ? (
+                  <div className="flex flex-col items-center justify-center py-4 gap-1 w-full">
+                    <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(currentDate) ? 'text-blue-600' : 'text-slate-500')}>
+                      {format(currentDate, 'eeee', { locale: tr })}
                     </span>
-                    <div className={cn("w-[46px] h-[46px] flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-blue-600 text-white' : 'text-slate-800 hover:bg-slate-100')}>
-                      <span className="text-[24px] font-medium">{format(day, 'd')}</span>
+                    <div className={cn("w-[48px] h-[48px] flex items-center justify-center rounded-full", isToday(currentDate) ? 'bg-blue-600 text-white' : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                      <span className="text-[24px] font-medium">{format(currentDate, 'd')}</span>
                     </div>
                   </div>
-                ))
-              )}
+                ) : (
+                  weekDays.map((day, i) => (
+                    <div key={i} className="flex flex-col items-center justify-center py-4 gap-1 border-l border-transparent">
+                      <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-blue-600' : 'text-slate-500')}>
+                        {format(day, 'eee', { locale: tr })}
+                      </span>
+                      <div className={cn("w-[46px] h-[46px] flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-blue-600 text-white' : 'text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                        <span className="text-[24px] font-medium">{format(day, 'd')}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Grid Area */}
-          {view === 'ay' ? (
-            <div className="flex-1 overflow-y-auto grid grid-cols-7 grid-rows-6">
-              {monthDays.map((day, i) => {
-                const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
-                return (
-                  <div key={i} className={cn("border-r border-b border-slate-100 p-2 min-h-[120px] hover:bg-slate-50 transition-colors cursor-pointer", !isSameMonth(day, currentDate) && "bg-slate-50/50")}>
-                    <div className={cn("text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full mx-auto", isToday(day) ? "bg-blue-600 text-white" : "text-slate-600")}>
-                      {format(day, 'd')}
-                    </div>
-                    <div className="space-y-1">
-                      {dayEvents.slice(0, 3).map((event: any) => (
-                        <div key={event.id} className="text-[10px] px-1.5 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>
-                          {event.title}
-                        </div>
-                      ))}
-                      {dayEvents.length > 3 && <div className="text-[9px] text-slate-400 pl-1">+{dayEvents.length - 3} daha</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div ref={gridScrollRef} className="flex-1 overflow-y-auto relative flex">
-              {/* Time Column */}
-              <div className="w-[64px] shrink-0 relative bg-white z-10 border-r border-slate-100">
-                {hours.map((hour, i) => (
-                  <div key={i} className="h-[80px] relative">
-                    <span className="absolute -top-[7px] right-2 text-[11px] text-slate-500 font-medium">
-                      {hour.toString().padStart(2, '0')}:00
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Day Grid */}
-              <div className={cn("flex-1 relative border-t border-slate-100", view === 'hafta' ? "grid grid-cols-7" : "block")}>
-                {/* Horizontal Lines */}
-                <div className="absolute inset-0 pointer-events-none">
-                  {hours.map((_, i) => (
-                    <div key={i} className="h-[80px] border-b border-slate-100 w-full"></div>
-                  ))}
-                </div>
-
-                {/* Day Columns */}
-                {(view === 'gün' ? [currentDate] : weekDays).map((day, i) => {
+          <div className="flex-1 overflow-y-auto relative bg-white dark:bg-slate-950" ref={gridScrollRef}>
+            {view === 'ay' ? (
+              <div className="grid grid-cols-7 h-full min-h-[600px] border-l border-slate-200 dark:border-slate-800">
+                {monthDays.map((day, i) => {
                   const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
                   return (
-                    <div key={i} className={cn("relative border-r border-[#f1f5f9] min-h-[1920px] cursor-pointer hover:bg-slate-50/30 transition-colors", isToday(day) && "bg-blue-50/20")}
-                      onClick={(e) => {
-                        if (e.target === e.currentTarget) {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const y = e.clientY - rect.top;
-                          const hour = Math.floor(y / 80);
-                          handleDateSelect(day, hour);
-                        }
-                      }}
+                    <div key={i} className={cn(
+                      "border-r border-b border-slate-200 dark:border-slate-800 p-2 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer flex flex-col items-end",
+                      !isSameMonth(day, currentDate) && "bg-slate-50/50 dark:bg-slate-900/50"
+                    )}
+                    onClick={() => handleDateSelect(day, 9)}
                     >
-                      {/* Current Time Line */}
-                      {isToday(day) && (
-                        <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${(currentTime.getHours()) * 80 + (currentTime.getMinutes() / 60) * 80}px` }}>
-                          <div className="h-[2px] bg-red-500 w-full relative">
-                            <div className="w-3 h-3 bg-red-500 rounded-full absolute -top-[5px] -left-[6px] shadow-sm"></div>
+                      <div className={cn(
+                        "text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full",
+                        isToday(day) ? "bg-blue-600 text-white" : "text-slate-600 dark:text-slate-400"
+                      )}>
+                        {format(day, 'd')}
+                      </div>
+                      <div className="w-full space-y-1 overflow-hidden">
+                        {dayEvents.slice(0, 3).map((event: any) => (
+                          <div key={event.id} className="text-[10px] px-1.5 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>
+                            {event.title}
                           </div>
-                        </div>
-                      )}
-
-                      {/* Events */}
-                      {dayEvents.map((event: any) => {
-                        const start = parseISO(event.start);
-                        const end = parseISO(event.end);
-                        const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
-                        const height = (differenceInMinutes(end, start) / 60) * 80;
-                        return (
-                          <div key={event.id} className="absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-sm border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden"
-                            style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color, borderColor: 'rgba(0,0,0,0.1)' }}
-                            onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
-                          >
-                            <div className="truncate">{event.title}</div>
-                            {height > 36 && <div className="opacity-80 text-[10px]">{format(start, 'HH:mm')} - {format(end, 'HH:mm')}</div>}
-                          </div>
-                        );
-                      })}
+                        ))}
+                        {dayEvents.length > 3 && <div className="text-[9px] text-slate-400 pl-1">+{dayEvents.length - 3} daha</div>}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
-          )}
+            ) : view === 'plan' ? (
+              <div className="p-8 max-w-4xl mx-auto space-y-8">
+                <h1 className="text-2xl font-bold">Program Akışı</h1>
+                {combinedEvents.length === 0 ? (
+                  <div className="text-center py-20 text-muted-foreground">Planlanmış bir etkinlik bulunmuyor.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {combinedEvents.map((event: any) => (
+                      <div key={event.id} className="flex gap-4 p-4 border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer" onClick={() => handleEventClick(event)}>
+                        <div className="w-1 bg-blue-500 rounded-full" style={{ backgroundColor: event.color }} />
+                        <div className="flex-1">
+                          <h4 className="font-semibold">{event.title}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {format(parseISO(event.start), 'd MMMM yyyy HH:mm', { locale: tr })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex relative h-[1920px]">
+                {/* Time Column */}
+                <div className="w-[64px] shrink-0 border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                  {hours.map((hour, i) => (
+                    <div key={i} className="h-[80px] relative">
+                      <span className="absolute -top-[7px] right-2 text-[11px] text-slate-500 font-medium">
+                        {hour.toString().padStart(2, '0')}:00
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day Grid */}
+                <div className={cn("flex-1 relative border-t border-slate-100 dark:border-slate-800", view === 'hafta' ? "grid grid-cols-7" : "block")}>
+                  {/* Horizontal Lines */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {hours.map((_, i) => (
+                      <div key={i} className="h-[80px] border-b border-slate-100 dark:border-slate-800 w-full"></div>
+                    ))}
+                  </div>
+
+                  {/* Day Columns */}
+                  {(view === 'gün' ? [currentDate] : weekDays).map((day, i) => {
+                    const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
+                    return (
+                      <div key={i} className={cn("relative border-r border-[#f1f5f9] dark:border-slate-800 cursor-pointer hover:bg-slate-50/30 dark:hover:bg-slate-800/30 transition-colors", isToday(day) && "bg-blue-50/20 dark:bg-blue-900/10")}
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const y = e.clientY - rect.top;
+                            const hour = Math.floor(y / 80);
+                            handleDateSelect(day, hour);
+                          }
+                        }}
+                      >
+                        {/* Current Time Line */}
+                        {isToday(day) && (
+                          <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${(currentTime.getHours()) * 80 + (currentTime.getMinutes() / 60) * 80}px` }}>
+                            <div className="h-[2px] bg-red-500 w-full relative">
+                              <div className="w-3 h-3 bg-red-500 rounded-full absolute -top-[5px] -left-[6px] shadow-sm"></div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Events */}
+                        {dayEvents.map((event: any) => {
+                          const start = parseISO(event.start);
+                          const end = parseISO(event.end);
+                          const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
+                          const height = (differenceInMinutes(end, start) / 60) * 80;
+                          return (
+                            <div key={event.id} className="absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-sm border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden"
+                              style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color, borderColor: 'rgba(0,0,0,0.1)' }}
+                              onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
+                            >
+                              <div className="truncate">{event.title}</div>
+                              {height > 36 && <div className="opacity-80 text-[10px]">{format(start, 'HH:mm')} - {format(end, 'HH:mm')}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </main>
       </div>
 
@@ -627,7 +678,7 @@ export default function DashboardPage() {
         <DialogContent className="sm:max-w-[425px]">
           <VisuallyHidden><DialogTitle>Etkinlik Düzenle</DialogTitle></VisuallyHidden>
           <DialogHeader>
-            <DialogTitle>{selectedEvent ? 'Planı Düzenle' : 'Yeni Plan Oluştur'}</DialogTitle>
+            <DialogTitle className="text-xl font-bold">{selectedEvent ? 'Planı Düzenle' : 'Yeni Plan Oluştur'}</DialogTitle>
             {!user && <DialogDescription className="text-amber-600 font-medium">Lütfen kaydetmek için giriş yapın.</DialogDescription>}
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -679,22 +730,97 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Settings Modal */}
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="max-w-[100vw] h-[100vh] p-0 m-0 border-none rounded-none bg-white dark:bg-[#1f1f1f] text-slate-900 dark:text-white overflow-hidden flex flex-col">
+          <VisuallyHidden><DialogTitle>Ayarlar</DialogTitle></VisuallyHidden>
+          <div className="h-16 border-b border-slate-200 dark:border-slate-700 flex items-center px-6 justify-between shrink-0">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <h2 className="text-xl font-bold">Ayarlar</h2>
+            </div>
+          </div>
+          <div className="flex-1 flex overflow-hidden">
+            <aside className="w-[300px] border-r border-slate-200 dark:border-slate-700 p-4 shrink-0 overflow-y-auto hidden md:block">
+              <nav className="space-y-1">
+                {['Genel', 'Görünüm', 'Bildirimler'].map((cat, i) => (
+                  <div key={i} className="py-2 px-4 text-[14px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                    {cat}
+                  </div>
+                ))}
+              </nav>
+            </aside>
+            <main className="flex-1 p-8 overflow-y-auto">
+              <div className="max-w-3xl space-y-12">
+                <section>
+                  <h3 className="text-2xl mb-6 font-semibold">Dil ve Bölge</h3>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-8 items-center">
+                      <Label className="text-slate-600 dark:text-slate-300">Dil</Label>
+                      <Select defaultValue="tr">
+                        <SelectTrigger className="bg-slate-50 dark:bg-[#2d2d2d] border-slate-200 dark:border-none">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="tr">Türkçe</SelectItem>
+                          <SelectItem value="en">English</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </section>
+                <section>
+                  <h3 className="text-2xl mb-6 font-semibold">Görünüm</h3>
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 dark:text-slate-300">Karanlık Mod</span>
+                      <Checkbox 
+                        onCheckedChange={(checked) => {
+                          if (checked) document.documentElement.classList.add('dark');
+                          else document.documentElement.classList.remove('dark');
+                        }}
+                      />
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </main>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Search Modal */}
+      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
+        <DialogContent className="sm:max-w-[600px] top-[20%] translate-y-0 p-0 overflow-hidden border-none shadow-2xl bg-white dark:bg-slate-900">
+          <VisuallyHidden><DialogTitle>Arama</DialogTitle></VisuallyHidden>
+          <div className="flex items-center px-4 h-14 border-b dark:border-slate-800">
+            <Search className="w-5 h-5 text-slate-400 mr-3" />
+            <input className="flex-1 outline-none bg-transparent text-[15px] placeholder:text-slate-400" placeholder="Etkinlik, kişi veya tarih arayın" autoFocus />
+          </div>
+          <div className="p-4 min-h-[200px] flex items-center justify-center text-slate-400 text-sm italic">
+            Arama sonuçları burada görünecek...
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* QR Modal */}
       <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] bg-white dark:bg-slate-900">
           <VisuallyHidden><DialogTitle>Randevu Linki</DialogTitle></VisuallyHidden>
           <DialogHeader>
             <DialogTitle>Randevu Linki & QR</DialogTitle>
             <DialogDescription>Öğrencileriniz bu link üzerinden randevu alabilir.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-6 py-6">
-            <div className="p-4 bg-white rounded-xl shadow-inner">
+            <div className="p-4 bg-white rounded-xl shadow-inner border">
               <QRCodeSVG value={bookingLink} size={200} />
             </div>
             <div className="w-full space-y-2">
               <Label>Randevu Linki</Label>
               <div className="flex gap-2">
-                <Input value={bookingLink} readOnly className="bg-slate-50" />
+                <Input value={bookingLink} readOnly className="bg-slate-50 dark:bg-slate-800 border-none" />
                 <Button variant="outline" size="icon" onClick={() => {
                   navigator.clipboard.writeText(bookingLink);
                   toast({ title: 'Kopyalandı' });
@@ -712,77 +838,9 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Settings Modal */}
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-[100vw] h-[100vh] p-0 m-0 border-none rounded-none bg-[#1f1f1f] text-white overflow-hidden flex flex-col">
-          <VisuallyHidden><DialogTitle>Ayarlar</DialogTitle></VisuallyHidden>
-          <div className="h-16 border-b border-slate-700 flex items-center px-6 justify-between shrink-0">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-800 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
-              <h2 className="text-xl">Ayarlar</h2>
-            </div>
-          </div>
-          <div className="flex-1 flex overflow-hidden">
-            <aside className="w-[300px] border-r border-slate-700 p-4 shrink-0 overflow-y-auto hidden md:block">
-              <nav className="space-y-1">
-                {['Genel', 'İçe ve dışa aktar', 'Görünüm', 'Bildirimler'].map((cat, i) => (
-                  <div key={i} className="py-2 px-4 text-[14px] font-medium text-slate-400 cursor-pointer hover:text-white transition-colors">
-                    {cat}
-                  </div>
-                ))}
-              </nav>
-            </aside>
-            <main className="flex-1 p-8 overflow-y-auto">
-              <div className="max-w-3xl space-y-12">
-                <section>
-                  <h3 className="text-2xl mb-6">Dil ve bölge</h3>
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-8 items-center">
-                      <Label className="text-slate-300">Dil</Label>
-                      <Select defaultValue="tr"><SelectTrigger className="bg-[#2d2d2d] border-none"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent></Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-8 items-center">
-                      <Label className="text-slate-300">Zaman Dilimi</Label>
-                      <Select defaultValue="tr"><SelectTrigger className="bg-[#2d2d2d] border-none"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="tr">İstanbul (GMT+03:00)</SelectItem></SelectContent></Select>
-                    </div>
-                  </div>
-                </section>
-                <section>
-                  <h3 className="text-2xl mb-6">Görünüm seçenekleri</h3>
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-300">Tema</span>
-                      <Select defaultValue="dark"><SelectTrigger className="w-32 bg-[#2d2d2d] border-none"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="light">Açık</SelectItem><SelectItem value="dark">Koyu</SelectItem></SelectContent></Select>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </main>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Search Modal */}
-      <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
-        <DialogContent className="sm:max-w-[600px] top-[20%] translate-y-0 p-0 overflow-hidden border-none shadow-2xl">
-          <VisuallyHidden><DialogTitle>Arama</DialogTitle></VisuallyHidden>
-          <div className="flex items-center px-4 h-14 bg-white border-b">
-            <Search className="w-5 h-5 text-slate-400 mr-3" />
-            <input className="flex-1 outline-none text-[15px] placeholder:text-slate-400" placeholder="Etkinlik, kişi veya tarih arayın" autoFocus />
-            <button onClick={() => setIsSearchOpen(false)} className="p-1 hover:bg-slate-100 rounded-full"><X className="w-5 h-5 text-slate-400" /></button>
-          </div>
-          <div className="p-4 bg-slate-50 min-h-[200px] flex items-center justify-center text-slate-400 text-sm italic">
-            Arama sonuçları burada görünecek...
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Info Modal */}
       <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] bg-white dark:bg-slate-900">
           <VisuallyHidden><DialogTitle>Yardım</DialogTitle></VisuallyHidden>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -790,19 +848,10 @@ export default function DashboardPage() {
               Yardım & İpuçları
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4 text-[14px] text-slate-600">
-            <div className="space-y-2">
-              <h4 className="font-bold text-slate-800">Nasıl randevu linki oluştururum?</h4>
-              <p>Sağ üstteki profil fotoğrafınıza tıklayıp "Randevu QR & Link" seçeneğini seçerek size özel oluşturulan linki kopyalayabilirsiniz.</p>
-            </div>
-            <div className="space-y-2">
-              <h4 className="font-bold text-slate-800">Öğrenciler nasıl randevu alır?</h4>
-              <p>Öğrenciler QR kodunuzu taratarak veya linke tıklayarak, müsait olduğunuz saatlerden birini seçip adlarını girmeleri yeterlidir.</p>
-            </div>
+          <div className="space-y-4 py-4 text-[14px] text-slate-600 dark:text-slate-400">
+            <p><strong>Randevu Alma:</strong> Takvimde boş bir saate tıklayarak veya "Oluştur" butonunu kullanarak yeni bir plan ekleyebilirsiniz.</p>
+            <p><strong>Öğretmen Modu:</strong> Öğretmen olarak, profil menüsünden QR kodunuzu alıp öğrencilerinizle paylaşarak randevu toplayabilirsiniz.</p>
           </div>
-          <DialogFooter>
-            <Button onClick={() => setIsInfoOpen(false)}>Anladım</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
