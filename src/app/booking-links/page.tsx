@@ -58,7 +58,7 @@ export default function BookingLinksPage() {
   const linksQuery = React.useMemo(() => {
     if (!user) return null;
     return query(collection(db, 'users', user.uid, 'bookingLinks'));
-  }, [db, user]);
+  }, [db, user?.uid]);
 
   const { data: linksData, isLoading } = useCollection(linksQuery as any);
 

@@ -34,7 +34,7 @@ export default function RegisterPage() {
       await updateProfile(user, { displayName: name });
 
       // RBAC: Grant teacher role for specific email
-      const role = email === 'proturkgamerefe@gmail.com' ? 'teacher' : 'student';
+      const role = email.toLowerCase() === 'proturkgamerefe@gmail.com' ? 'teacher' : 'student';
 
       // Initialize user document
       await setDoc(doc(db, 'users', user.uid), {

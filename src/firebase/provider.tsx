@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
@@ -88,6 +89,14 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     );
     return () => unsubscribe(); // Cleanup
   }, [auth]); // Depends on the auth instance
+
+  // Effect to handle Radix UI pointer-events deadlock bug
+  useEffect(() => {
+    // Cleanup function to ensure body pointer events are restored if a modal or crash leaves it locked
+    return () => {
+      document.body.style.pointerEvents = "";
+    };
+  }, []);
 
   // Memoize the context value
   const contextValue = useMemo((): FirebaseContextState => {

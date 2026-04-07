@@ -173,11 +173,11 @@ export default function DashboardPage() {
   const eventsQuery = useMemoFirebase(() => {
     if (!user) return null;
     return query(collection(db, 'users', user.uid, 'events'), orderBy('start', 'asc'));
-  }, [db, user]);
+  }, [db, user?.uid]);
 
   const { data: eventsData } = useCollection(eventsQuery);
   
-  const userDocRef = useMemoFirebase(() => user ? doc(db, 'users', user.uid) : null, [db, user]);
+  const userDocRef = useMemoFirebase(() => user ? doc(db, 'users', user.uid) : null, [db, user?.uid]);
   const { data: userData } = useDoc(userDocRef);
 
   const isTeacher = userData?.role === 'teacher' || user?.email === 'proturkgamerefe@gmail.com';
