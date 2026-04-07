@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState } from 'react';
-import { useUser, useFirestore, useCollection } from '@/firebase';
+import React, { useState, useMemo } from 'react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { 
   collection, 
   query, 
@@ -55,12 +55,12 @@ export default function BookingLinksPage() {
     timeFrame: 'thisWeek'
   });
 
-  const linksQuery = React.useMemo(() => {
+  const linksQuery = useMemoFirebase(() => {
     if (!user) return null;
     return query(collection(db, 'users', user.uid, 'bookingLinks'));
   }, [db, user?.uid]);
 
-  const { data: linksData, isLoading } = useCollection(linksQuery as any);
+  const { data: linksData, isLoading } = useCollection(linksQuery);
 
   const handleCreate = async () => {
     if (!user) return;
@@ -82,16 +82,6 @@ export default function BookingLinksPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!user) return;
-    try {
-      await deleteDoc(doc(db, 'users', user.uid, 'bookingLinks', id));
-      toast({ title: 'Silindi', description: 'Randevu linki kaldırıldı.' });
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'Hata', description: 'Silme işlemi başarısız.' });
-    }
-  };
-
   const copyLink = (id: string) => {
     const url = `${window.location.origin}/book/${user?.uid}/${id}`;
     navigator.clipboard.writeText(url);
@@ -99,62 +89,34 @@ export default function BookingLinksPage() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30 p-4 sm:p-8">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="max-w-5xl mx-auto space-y-8">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild>
-              <Link href="/">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
+              <Link href="/"><ArrowLeft className="w-5 h-5" /></Link>
             </Button>
             <h1 className="text-3xl font-bold tracking-tight">Randevu Linklerim</h1>
           </div>
-          
           <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Yeni Link Oluştur
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Yeni Randevu Linki</DialogTitle>
-              </DialogHeader>
+            <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-2" /> Yeni Link Oluştur</Button></DialogTrigger>
+            <DialogContent className="bg-white">
+              <DialogHeader><DialogTitle>Yeni Randevu Linki</DialogTitle></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="title">Link Başlığı</Label>
-                  <Input 
-                    id="title" 
-                    placeholder="Örn: 30 Dakikalık Ön Görüşme" 
-                    value={form.title}
-                    onChange={(e) => setForm({...form, title: e.target.value})}
-                  />
+                  <Label>Link Başlığı</Label>
+                  <Input value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} placeholder="Örn: 30 Dakikalık Ön Görüşme" />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="duration">Süre (Dakika)</Label>
+                  <Label>Süre (Dakika)</Label>
                   <Select value={form.duration} onValueChange={(v) => setForm({...form, duration: v})}>
-                    <SelectTrigger id="duration">
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="15">15 Dakika</SelectItem>
                       <SelectItem value="30">30 Dakika</SelectItem>
                       <SelectItem value="45">45 Dakika</SelectItem>
                       <SelectItem value="60">60 Dakika</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="mode">Randevu Modu</Label>
-                  <Select value={form.mode} onValueChange={(v) => setForm({...form, mode: v})}>
-                    <SelectTrigger id="mode">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="manual">Seçimli (Kullanıcı seçer)</SelectItem>
-                      <SelectItem value="autoSoonest">En Yakın Zamana Otomatik</SelectItem>
+                      <SelectItem value="90">90 Dakika</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -177,35 +139,25 @@ export default function BookingLinksPage() {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {linksData?.map((link) => (
-              <Card key={link.id} className="flex flex-col">
+              <Card key={link.id} className="flex flex-col border-none shadow-lg">
                 <CardHeader>
                   <CardTitle className="text-lg line-clamp-1">{link.title}</CardTitle>
                   <CardDescription>{link.durationMinutes} Dakika • {link.mode === 'manual' ? 'Seçimli' : 'Otomatik'}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1">
-                  <div className="bg-muted/50 p-4 rounded-lg flex justify-center mb-4">
-                    <QRCodeSVG 
-                      value={`${window.location.origin}/book/${user?.uid}/${link.id}`} 
-                      size={120}
-                      level="L"
-                    />
+                  <div className="bg-slate-100 p-4 rounded-lg flex justify-center mb-4">
+                    <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/${link.id}`} size={120} level="L" />
                   </div>
                 </CardContent>
                 <CardFooter className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" size="sm" onClick={() => copyLink(link.id)}>
-                    <Copy className="w-4 h-4 mr-2" />
-                    Kopyala
-                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => copyLink(link.id)}><Copy className="w-4 h-4 mr-2" /> Kopyala</Button>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/book/${user?.uid}/${link.id}`} target="_blank">
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Görüntüle
-                    </Link>
+                    <Link href={`/book/${user?.uid}/${link.id}`} target="_blank"><ExternalLink className="w-4 h-4 mr-2" /> Görüntüle</Link>
                   </Button>
-                  <Button variant="destructive" size="sm" className="col-span-2 mt-2" onClick={() => handleDelete(link.id)}>
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Sil
-                  </Button>
+                  <Button variant="destructive" size="sm" className="col-span-2 mt-2" onClick={async () => {
+                    await deleteDoc(doc(db, 'users', user?.uid!, 'bookingLinks', link.id));
+                    toast({title:'Silindi'});
+                  }}><Trash2 className="w-4 h-4 mr-2" /> Sil</Button>
                 </CardFooter>
               </Card>
             ))}
