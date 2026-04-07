@@ -54,12 +54,20 @@ export default function PublicBookingPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        if (!userId || !linkId) return;
+        
         const linkDoc = await getDoc(doc(db, 'users', userId, 'bookingLinks', linkId));
-        if (!linkDoc.exists() || !linkDoc.data().active) {
+        
+        // Fallback for 'default' if the specific ID doesn't exist
+        if (!linkDoc.exists() && linkId === 'default') {
+          // You might want to handle this differently, but for now let's just use defaults
+          setLinkData({ title: 'Genel Randevu', durationMinutes: 30, active: true });
+        } else if (!linkDoc.exists() || !linkDoc.data().active) {
           router.push('/404');
           return;
+        } else {
+          setLinkData(linkDoc.data());
         }
-        setLinkData(linkDoc.data());
 
         const userDoc = await getDoc(doc(db, 'users', userId));
         setUserData(userDoc.data());
@@ -85,7 +93,7 @@ export default function PublicBookingPage() {
           userDoc.data()?.workingHours || [],
           existingEvents,
           {
-            duration: linkDoc.data().durationMinutes,
+            duration: linkData?.durationMinutes || 30,
             bufferBefore: 0,
             bufferAfter: 0,
             timezone: userDoc.data()?.timezone || 'UTC'
@@ -99,7 +107,7 @@ export default function PublicBookingPage() {
       }
     };
     fetchData();
-  }, [db, userId, linkId, router]);
+  }, [db, userId, linkId, router, linkData?.durationMinutes]);
 
   const handleBook = async () => {
     if (!form.name) {
@@ -109,7 +117,7 @@ export default function PublicBookingPage() {
 
     try {
       const start = parseISO(`${selectedSlot.date}T${selectedSlot.slot.start}`);
-      const end = addMinutes(start, linkData.durationMinutes);
+      const end = addMinutes(start, linkData.durationMinutes || 30);
 
       const bookingData = {
         userId,
@@ -187,6 +195,7 @@ export default function PublicBookingPage() {
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
           <Avatar className="w-20 h-20 mx-auto mb-4 border-2 border-white shadow-lg">
+            <AvatarImage src={userData?.photoURL || ''} />
             <AvatarFallback className="text-2xl">{userData?.displayName?.charAt(0)}</AvatarFallback>
           </Avatar>
           <h1 className="text-xl font-medium text-muted-foreground">{userData?.displayName}</h1>
@@ -194,7 +203,7 @@ export default function PublicBookingPage() {
           <div className="flex items-center justify-center gap-4 mt-4 text-muted-foreground">
             <div className="flex items-center gap-1">
               <Clock className="w-4 h-4" />
-              {linkData?.durationMinutes} Dakika
+              {linkData?.durationMinutes || 30} Dakika
             </div>
           </div>
         </div>
@@ -203,31 +212,35 @@ export default function PublicBookingPage() {
           <div className="grid gap-6">
             <h3 className="text-xl font-bold text-center">Bir Zaman Dilimi Seçin</h3>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {availableSlots.map((day) => (
-                <Card key={day.date}>
-                  <CardHeader className="p-4 border-b">
-                    <CardTitle className="text-sm font-semibold capitalize">
-                      {format(parseISO(day.date), 'EEEE, d MMM', { locale: tr })}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 grid gap-2">
-                    {day.slots.map((slot: any) => (
-                      <Button 
-                        key={slot.start} 
-                        variant="outline" 
-                        className="w-full justify-between"
-                        onClick={() => {
-                          setSelectedSlot({ date: day.date, slot });
-                          setStep(2);
-                        }}
-                      >
-                        {slot.start}
-                        <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </Button>
-                    ))}
-                  </CardContent>
-                </Card>
-              ))}
+              {availableSlots.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-muted-foreground">Müsait randevu bulunamadı.</div>
+              ) : (
+                availableSlots.map((day) => (
+                  <Card key={day.date}>
+                    <CardHeader className="p-4 border-b">
+                      <CardTitle className="text-sm font-semibold capitalize">
+                        {format(parseISO(day.date), 'EEEE, d MMM', { locale: tr })}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 grid gap-2">
+                      {day.slots.map((slot: any) => (
+                        <Button 
+                          key={slot.start} 
+                          variant="outline" 
+                          className="w-full justify-between"
+                          onClick={() => {
+                            setSelectedSlot({ date: day.date, slot });
+                            setStep(2);
+                          }}
+                        >
+                          {slot.start}
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
           </div>
         ) : (

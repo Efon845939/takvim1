@@ -55,7 +55,12 @@ import {
   Video,
   MapPin,
   AlignLeft,
-  MoreVertical
+  MoreVertical,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare,
+  Send,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -90,6 +95,7 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { QRCodeSVG } from 'qrcode.react';
+import { calendarHelper } from '@/ai/flows/calendar-helper';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
@@ -123,7 +129,9 @@ export default function DashboardPage() {
     type: 'personal',
     color: '#3b82f6',
     guests: '',
-    location: ''
+    location: '',
+    reminder: '30',
+    visibility: 'default'
   });
 
   const [filters, setFilters] = useState({
@@ -136,6 +144,15 @@ export default function DashboardPage() {
   const [holidays, setHolidays] = useState<any[]>([]);
   const [selectedCountries, setSelectedCountries] = useState(['TR']);
   const [activeEventTab, setActiveTab] = useState('Etkinlik');
+
+  // AI Helper State
+  const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
+  const [aiInput, setAiInput] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  // Settings UI State
+  const [settingsSection, setSettingsSection] = useState('dil-bolge');
+  const [isGenelOpen, setIsGenelOpen] = useState(true);
 
   // --- REFRESH CURRENT TIME & AUTO SCROLL ---
   useEffect(() => {
@@ -156,8 +173,8 @@ export default function DashboardPage() {
           const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${code}`);
           if (response.ok) {
             const data = await response.json();
-            allHolidays = [...allHolidays, ...data.map((h: any) => ({
-              id: h.date + h.localName + code,
+            allHolidays = [...allHolidays, ...data.map((h: any, idx: number) => ({
+              id: `holiday-${code}-${h.date}-${h.name || h.localName}-${idx}`,
               title: `${h.localName} (${code})`,
               start: h.date,
               end: h.date,
@@ -181,7 +198,12 @@ export default function DashboardPage() {
   }, [db, user?.uid]);
 
   const { data: eventsData } = useCollection(eventsQuery);
-  const userDocRef = useMemoFirebase(() => user ? doc(db, 'users', user.uid) : null, [db, user?.uid]);
+  
+  const userDocRef = useMemoFirebase(() => {
+    if (!user) return null;
+    return doc(db, 'users', user.uid);
+  }, [db, user?.uid]);
+  
   const { data: userData } = useDoc(userDocRef);
 
   const isTeacher = userData?.role === 'teacher' || user?.email === 'proturkgamerefe@gmail.com';
@@ -189,8 +211,13 @@ export default function DashboardPage() {
   const combinedEvents = React.useMemo(() => {
     const userEvents = eventsData || [];
     const holidayEvents = filters.holiday ? holidays : [];
-    return [...userEvents, ...holidayEvents];
-  }, [eventsData, holidays, filters.holiday]);
+    const typedEvents = userEvents.filter(e => filters[e.type as keyof typeof filters]);
+    const combined = [...typedEvents, ...holidayEvents];
+    return combined.map((e, idx) => ({ 
+      ...e, 
+      uniqueId: e.id || `h-${e.start}-${idx}`
+    }));
+  }, [eventsData, holidays, filters]);
 
   const weekDays = React.useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -226,7 +253,9 @@ export default function DashboardPage() {
       type: 'personal',
       color: '#3b82f6',
       guests: '',
-      location: ''
+      location: '',
+      reminder: '30',
+      visibility: 'default'
     });
     setIsEventModalOpen(true);
   };
@@ -242,7 +271,9 @@ export default function DashboardPage() {
       type: event.type,
       color: event.color,
       guests: event.guests || '',
-      location: event.location || ''
+      location: event.location || '',
+      reminder: event.reminder || '30',
+      visibility: event.visibility || 'default'
     });
     setIsEventModalOpen(true);
   };
@@ -270,6 +301,33 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDeleteEvent = async () => {
+    if (!user || !selectedEvent) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id));
+      setIsEventModalOpen(false);
+      toast({ title: 'Silindi' });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Hata oluştu' });
+    }
+  };
+
+  const handleAiSend = async () => {
+    if (!aiInput.trim()) return;
+    const msg = aiInput;
+    setAiInput('');
+    setAiMessages(prev => [...prev, { role: 'user', text: msg }]);
+    setIsAiLoading(true);
+    try {
+      const response = await calendarHelper({ message: msg });
+      setAiMessages(prev => [...prev, { role: 'ai', text: response.reply }]);
+    } catch (error) {
+      setAiMessages(prev => [...prev, { role: 'ai', text: 'Üzgünüm, şu an yardımcı olamıyorum.' }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const navigate = (dir: 'prev' | 'next' | 'today') => {
     if (dir === 'today') {
       setCurrentDate(new Date());
@@ -293,15 +351,13 @@ export default function DashboardPage() {
     return `${format(weekDays[0], 'd MMMM')} – ${format(weekDays[6], 'd MMMM yyyy', { locale: tr })}`;
   }, [currentDate, weekDays, view]);
 
-  const bookingLink = user ? `${window.location.origin}/book/${user.uid}/default` : '';
-
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-white font-sans">Yükleniyor...</div>;
 
   return (
     <div className="h-screen w-full flex flex-col bg-[#202124] overflow-hidden text-slate-200 font-sans">
       
       {/* --- HEADER --- */}
-      <header className="h-[64px] border-b border-slate-700 flex items-center px-4 justify-between shrink-0 bg-[#202124] z-30">
+      <header className="h-[64px] border-b border-slate-700 flex items-center px-4 justify-between shrink-0 bg-[#202124] z-30 shadow-sm">
         <div className="flex items-center gap-4">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
             <Menu className="w-5 h-5 text-slate-300" />
@@ -434,7 +490,7 @@ export default function DashboardPage() {
               <div>
                 <div className="flex items-center justify-between px-2 mb-2 group">
                   <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Diğer Takvimler</h3>
-                  <button onClick={() => setIsCountryModalOpen(true)} className="p-1 hover:bg-slate-800 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Plus className="w-3.5 h-3.5 text-slate-400" /></button>
+                  <button onClick={() => setIsCountryModalOpen(true)} className="p-1 hover:bg-slate-800 rounded-full transition-opacity opacity-0 group-hover:opacity-100"><Plus className="w-4 h-4 text-slate-400" /></button>
                 </div>
                 <div className="space-y-1">
                   <label className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-slate-800 rounded-md transition-colors">
@@ -450,9 +506,9 @@ export default function DashboardPage() {
         <main className="flex-1 flex flex-col overflow-hidden bg-[#202124]">
           {/* Day Headers */}
           {view !== 'plan' && (
-            <div className="flex pr-[15px] shrink-0">
-              <div className="w-[64px] shrink-0 border-r border-transparent"></div>
-              <div className={cn("flex-1 border-b border-slate-700", view === 'ay' ? "grid grid-cols-7" : view === 'gün' ? "block" : "grid grid-cols-7")}>
+            <div className="flex pr-[15px] shrink-0 border-b border-slate-700">
+              <div className="w-[64px] shrink-0"></div>
+              <div className={cn("flex-1", view === 'ay' ? "grid grid-cols-7" : view === 'gün' ? "block" : "grid grid-cols-7")}>
                 {view === 'gün' ? (
                   <div className="flex flex-col items-center justify-center py-4 gap-1 w-full">
                     <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(currentDate) ? 'text-blue-400' : 'text-slate-500')}>{format(currentDate, 'eeee', { locale: tr })}</span>
@@ -460,7 +516,7 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   weekDays.map((day, i) => (
-                    <div key={i} className="flex flex-col items-center justify-center py-4 gap-1 border-l border-transparent">
+                    <div key={i} className="flex flex-col items-center justify-center py-4 gap-1">
                       <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-blue-400' : 'text-slate-500')}>{format(day, 'eee', { locale: tr })}</span>
                       <div className={cn("w-[46px] h-[46px] flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-blue-600 text-white' : 'text-slate-200 hover:bg-slate-800')}><span className="text-[24px] font-medium">{format(day, 'd')}</span></div>
                     </div>
@@ -474,13 +530,13 @@ export default function DashboardPage() {
             {view === 'ay' ? (
               <div className="grid grid-cols-7 h-full min-h-[600px] border-l border-slate-700">
                 {monthDays.map((day, i) => {
-                  const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
+                  const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day));
                   return (
-                    <div key={i} className={cn("border-r border-b border-slate-700 p-2 hover:bg-slate-800/50 transition-colors cursor-pointer flex flex-col items-end", !isSameMonth(day, currentDate) && "opacity-30")} onClick={() => handleDateSelect(day, 9)}>
+                    <div key={`month-day-${i}`} className={cn("border-r border-b border-slate-700 p-2 hover:bg-slate-800/50 transition-colors cursor-pointer flex flex-col items-end", !isSameMonth(day, currentDate) && "opacity-30")} onClick={() => handleDateSelect(day, 9)}>
                       <div className={cn("text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full", isToday(day) ? "bg-blue-600 text-white" : "text-slate-400")}>{format(day, 'd')}</div>
                       <div className="w-full space-y-1 overflow-hidden">
                         {dayEvents.slice(0, 3).map((event: any) => (
-                          <div key={event.id} className="text-[10px] px-1.5 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>{event.title}</div>
+                          <div key={event.uniqueId} className="text-[10px] px-1.5 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>{event.title}</div>
                         ))}
                         {dayEvents.length > 3 && <div className="text-[9px] text-slate-500 pl-1">+{dayEvents.length - 3} daha</div>}
                       </div>
@@ -490,13 +546,13 @@ export default function DashboardPage() {
               </div>
             ) : view === 'plan' ? (
               <div className="p-8 max-w-4xl mx-auto space-y-8">
-                <h1 className="text-2xl font-bold text-white">Program Akışı</h1>
+                <h1 className="text-2xl font-bold text-white border-b border-slate-700 pb-4">Program Akışı</h1>
                 {combinedEvents.length === 0 ? (
                   <div className="text-center py-20 text-slate-500">Planlanmış bir etkinlik bulunmuyor.</div>
                 ) : (
                   <div className="space-y-4">
                     {combinedEvents.map((event: any) => (
-                      <div key={event.id} className="flex gap-4 p-4 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" onClick={() => handleEventClick(event)}>
+                      <div key={event.uniqueId} className="flex gap-4 p-4 border border-slate-700 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" onClick={() => handleEventClick(event)}>
                         <div className="w-1 rounded-full" style={{ backgroundColor: event.color }} />
                         <div className="flex-1">
                           <h4 className="font-semibold text-white">{event.title}</h4>
@@ -525,7 +581,7 @@ export default function DashboardPage() {
                   </div>
 
                   {(view === 'gün' ? [currentDate] : weekDays).map((day, i) => {
-                    const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
+                    const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day));
                     return (
                       <div key={i} className={cn("relative border-r border-slate-800 cursor-pointer hover:bg-slate-800/20 transition-colors", isToday(day) && "bg-blue-900/10")} onClick={(e) => { if (e.target === e.currentTarget) { const rect = e.currentTarget.getBoundingClientRect(); const y = e.clientY - rect.top; handleDateSelect(day, Math.floor(y / 80)); }}}>
                         {isToday(day) && (
@@ -538,7 +594,7 @@ export default function DashboardPage() {
                           const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
                           const height = (differenceInMinutes(end, start) / 60) * 80;
                           return (
-                            <div key={event.id} className="absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-md border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden"
+                            <div key={event.uniqueId} className="absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-md border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden"
                               style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color, borderColor: 'rgba(0,0,0,0.2)' }}
                               onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
                             >
@@ -557,21 +613,63 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* ========================================================= */}
-      {/* EXACT GOOGLE CALENDAR EVENT CREATION MODAL CLONE          */}
-      {/* ========================================================= */}
-      <Dialog open={isEventModalOpen} onOpenChange={(val) => { setIsEventModalOpen(val); if(!val) document.body.style.pointerEvents = ""; }}>
+      {/* --- INFO / AI HELPER MODAL --- */}
+      <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
+        <DialogContent className="sm:max-w-[500px] h-[600px] bg-[#202124] border-slate-700 p-0 flex flex-col overflow-hidden">
+          <VisuallyHidden><DialogTitle>Takvim Asistanı ve Yardım</DialogTitle></VisuallyHidden>
+          <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+            <div className="flex items-center gap-3 text-white">
+              <Sparkles className="w-5 h-5 text-blue-400" />
+              <h2 className="font-semibold">AI Takvim Asistanı</h2>
+            </div>
+            <button onClick={() => setIsInfoOpen(false)} className="p-1 hover:bg-slate-700 rounded-full"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {aiMessages.length === 0 && (
+              <div className="space-y-6">
+                <div className="bg-slate-800/30 p-4 rounded-lg border border-slate-700 space-y-2">
+                  <h3 className="font-medium text-blue-400 flex items-center gap-2"><HelpCircle className="w-4 h-4" /> Hızlı İpuçları</h3>
+                  <ul className="text-xs text-slate-400 space-y-2 list-disc pl-4">
+                    <li>Takvimde boş bir yere tıklayarak hızlıca etkinlik ekleyebilirsiniz.</li>
+                    <li>Sürükle bırak özelliği ile etkinliklerinizin zamanını değiştirebilirsiniz.</li>
+                    <li>Sol menüdeki '+' butonu ile farklı ülkelerin tatillerini ekleyebilirsiniz.</li>
+                    <li>QR kodunuzu paylaşarak başkalarından randevu alabilirsiniz.</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-center text-slate-500">Asistan'a takviminizle ilgili her şeyi sorabilirsiniz.</p>
+              </div>
+            )}
+            {aiMessages.map((msg, i) => (
+              <div key={i} className={cn("max-w-[85%] p-3 rounded-2xl text-sm", msg.role === 'user' ? "bg-blue-600 text-white ml-auto" : "bg-slate-800 text-slate-200 mr-auto")}>
+                {msg.text}
+              </div>
+            ))}
+            {isAiLoading && <div className="text-xs text-blue-400 animate-pulse ml-4">Asistan düşünüyor...</div>}
+          </div>
+          <div className="p-4 border-t border-slate-700 bg-[#202124]">
+            <div className="flex gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700 focus-within:border-blue-500 transition-colors">
+              <input 
+                className="flex-1 bg-transparent outline-none text-sm text-white" 
+                placeholder="Takvimi nasıl kullanırım? Etkinlik nasıl eklenir?..." 
+                value={aiInput}
+                onChange={(e) => setAiInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
+              />
+              <button onClick={handleAiSend} className="p-1 text-blue-400 hover:text-blue-300"><Send className="w-4 h-4" /></button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- EVENT MODAL --- */}
+      <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
         <DialogContent className="sm:max-w-[500px] bg-[#202124] border-slate-700 p-0 overflow-hidden shadow-2xl rounded-xl">
-          <VisuallyHidden><DialogTitle>Etkinlik Oluştur</DialogTitle></VisuallyHidden>
-          
-          {/* Header Controls */}
+          <VisuallyHidden><DialogTitle>Etkinlik Düzenle</DialogTitle></VisuallyHidden>
           <div className="flex items-center justify-between p-2 bg-slate-800/20">
             <button className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><Menu className="w-4 h-4" /></button>
             <button onClick={() => setIsEventModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
           </div>
-
           <div className="p-6 pt-2 space-y-6">
-            {/* Title Input */}
             <input 
               type="text" 
               placeholder="Başlık ekle" 
@@ -580,24 +678,11 @@ export default function DashboardPage() {
               className="w-full bg-transparent text-[24px] text-white placeholder-slate-500 outline-none border-b-2 border-slate-700 focus:border-blue-400 pb-1 transition-colors"
               autoFocus
             />
-
-            {/* Tabs */}
             <div className="flex gap-2">
               {['Etkinlik', 'Görev', 'Randevu programı'].map(tab => (
-                <button 
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={cn(
-                    "px-4 py-1.5 rounded-full text-sm font-medium transition-all",
-                    activeEventTab === tab ? "bg-blue-900/40 text-blue-300" : "text-slate-400 hover:bg-slate-800"
-                  )}
-                >
-                  {tab}
-                </button>
+                <button key={tab} onClick={() => setActiveTab(tab)} className={cn("px-4 py-1.5 rounded-full text-sm font-medium transition-all", activeEventTab === tab ? "bg-blue-900/40 text-blue-300" : "text-slate-400 hover:bg-slate-800")}>{tab}</button>
               ))}
             </div>
-
-            {/* Form Rows */}
             <div className="space-y-5">
               <div className="flex items-start gap-4">
                 <Clock className="w-5 h-5 text-slate-400 mt-1 shrink-0" />
@@ -607,48 +692,53 @@ export default function DashboardPage() {
                     <span className="text-slate-500">-</span>
                     <input type="datetime-local" value={eventForm.end} onChange={(e) => setEventForm({...eventForm, end: e.target.value})} className="bg-slate-800/50 border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none" />
                   </div>
-                  <div className="text-xs text-blue-400 cursor-pointer hover:underline">Saat dilimi • Yinelenmez</div>
                 </div>
               </div>
-
               <div className="flex items-center gap-4 group">
                 <Users className="w-5 h-5 text-slate-400 shrink-0" />
                 <input type="text" placeholder="Davetli ekle" value={eventForm.guests} onChange={(e) => setEventForm({...eventForm, guests: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full border-b border-transparent focus:border-slate-700 pb-1" />
               </div>
-
-              <div className="flex items-center gap-4 cursor-pointer hover:bg-slate-800/50 p-2 -ml-2 rounded-lg transition-colors">
-                <div className="bg-blue-600 rounded p-1.5"><Video className="w-4 h-4 text-white" /></div>
-                <div className="text-sm text-blue-400 font-medium">Google Meet video konferans görüşmesi ekle</div>
-              </div>
-
               <div className="flex items-center gap-4 group">
                 <MapPin className="w-5 h-5 text-slate-400 shrink-0" />
                 <input type="text" placeholder="Konum ekle" value={eventForm.location} onChange={(e) => setEventForm({...eventForm, location: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full border-b border-transparent focus:border-slate-700 pb-1" />
               </div>
-
               <div className="flex items-start gap-4 group">
                 <AlignLeft className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
-                <textarea placeholder="Açıklama veya Google Drive eki ekle" value={eventForm.description} onChange={(e) => setEventForm({...eventForm, description: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full min-h-[60px] resize-none" />
+                <textarea placeholder="Açıklama ekle" value={eventForm.description} onChange={(e) => setEventForm({...eventForm, description: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full min-h-[60px] resize-none" />
               </div>
-
-              <div className="flex items-start gap-4 cursor-pointer hover:bg-slate-800/50 p-2 -ml-2 rounded-lg transition-colors">
-                <CalendarIcon className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-200">{user?.displayName || 'Takvimim'}</span>
-                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                  </div>
-                  <div className="text-xs text-slate-500">Meşgul • Varsayılan görünürlük • 30 dakika önce bildir</div>
-                </div>
+              <div className="flex items-center gap-4">
+                <HelpCircle className="w-5 h-5 text-slate-400" />
+                <Select value={eventForm.reminder} onValueChange={(v) => setEventForm({...eventForm, reminder: v})}>
+                  <SelectTrigger className="bg-transparent border-none text-slate-300 focus:ring-0 p-0 h-auto">
+                    <SelectValue placeholder="Bildirim" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 text-white">
+                    <SelectItem value="10">10 dakika önce bildir</SelectItem>
+                    <SelectItem value="30">30 dakika önce bildir</SelectItem>
+                    <SelectItem value="60">1 saat önce bildir</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-4">
+                <MoreVertical className="w-5 h-5 text-slate-400" />
+                <Select value={eventForm.visibility} onValueChange={(v) => setEventForm({...eventForm, visibility: v})}>
+                  <SelectTrigger className="bg-transparent border-none text-slate-300 focus:ring-0 p-0 h-auto">
+                    <SelectValue placeholder="Görünürlük" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 text-white">
+                    <SelectItem value="default">Varsayılan görünürlük</SelectItem>
+                    <SelectItem value="public">Herkes görebilir</SelectItem>
+                    <SelectItem value="private">Gizli</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
-
           <div className="p-4 bg-slate-800/10 border-t border-slate-700/50 flex items-center justify-between">
             <button className="text-sm font-medium text-slate-400 hover:text-white px-3 py-1.5 rounded hover:bg-slate-800">Diğer seçenekler</button>
             <div className="flex gap-3">
               {selectedEvent && (
-                <button onClick={async () => { await deleteDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id)); setIsEventModalOpen(false); toast({title: 'Silindi'}); }} className="text-sm font-medium text-red-400 hover:bg-red-900/20 px-4 py-2 rounded-md">Sil</button>
+                <button onClick={handleDeleteEvent} className="text-sm font-medium text-red-400 hover:bg-red-900/20 px-4 py-2 rounded-md">Sil</button>
               )}
               <button onClick={handleSaveEvent} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-full text-sm font-medium transition-all shadow-lg">Kaydet</button>
             </div>
@@ -656,136 +746,187 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ========================================================= */}
-      {/* THE PROPER SETTINGS MODAL (FULL SCREEN)                   */}
-      {/* ========================================================= */}
-      <Dialog open={isSettingsOpen} onOpenChange={(val) => { setIsSettingsOpen(val); if(!val) document.body.style.pointerEvents = ""; }}>
-        <DialogContent className="max-w-full h-full p-0 m-0 border-none rounded-none bg-[#202124] text-white flex flex-col">
+      {/* --- SETTINGS MODAL --- */}
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="max-w-full h-full p-0 m-0 border-none rounded-none bg-[#202124] text-white flex flex-col overflow-hidden">
           <VisuallyHidden><DialogTitle>Ayarlar</DialogTitle></VisuallyHidden>
-          
           <div className="h-16 border-b border-slate-700 flex items-center px-6 gap-6 shrink-0 bg-[#202124]">
             <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 text-slate-300" /></button>
             <h2 className="text-xl font-medium">Ayarlar</h2>
           </div>
-          
           <div className="flex flex-1 overflow-hidden">
-            {/* Sidebar Navigation */}
-            <div className="w-[280px] border-r border-slate-700 py-6 overflow-y-auto bg-[#292a2d]">
-              <div className="px-6 mb-2 text-xs font-bold text-slate-500 uppercase tracking-widest">Genel</div>
-              <button className="w-full text-left px-6 py-3 bg-blue-900/20 text-blue-400 font-medium border-l-4 border-blue-500">Dil ve bölge</button>
-              <button className="w-full text-left px-6 py-3 hover:bg-slate-800 text-slate-400">Saat dilimi</button>
-              <button className="w-full text-left px-6 py-3 hover:bg-slate-800 text-slate-400">Etkinlik ayarları</button>
-              <div className="px-6 mt-8 mb-2 text-xs font-bold text-slate-500 uppercase tracking-widest">Görünüm</div>
-              <button className="w-full text-left px-6 py-3 hover:bg-slate-800 text-slate-400">Tema</button>
-              <button className="w-full text-left px-6 py-3 hover:bg-slate-800 text-slate-400">Yoğunluk</button>
-            </div>
-            
-            {/* Content Area */}
-            <div className="flex-1 p-12 overflow-y-auto">
-              <div className="max-w-2xl mx-auto space-y-12">
-                <section>
-                  <h3 className="text-2xl font-normal mb-8">Dil ve bölge</h3>
-                  <div className="space-y-8">
-                    <div className="grid grid-cols-2 gap-8 items-center">
-                      <Label className="text-slate-400">Dil</Label>
-                      <Select defaultValue="tr">
-                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                          <SelectItem value="tr">Türkçe</SelectItem>
-                          <SelectItem value="en">English</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-8 items-center">
-                      <Label className="text-slate-400">Saat Biçimi</Label>
-                      <Select defaultValue="24">
-                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                          <SelectItem value="24">13:00 (24 Saat)</SelectItem>
-                          <SelectItem value="12">1:00 PM (12 Saat)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+            <aside className="w-[300px] border-r border-slate-700 py-6 overflow-y-auto bg-[#292a2d]">
+              <div className="space-y-1">
+                <button onClick={() => setIsGenelOpen(!isGenelOpen)} className="w-full flex items-center justify-between px-6 py-3 bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
+                  <span className="flex items-center gap-3">Genel</span>
+                  {isGenelOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+                {isGenelOpen && (
+                  <div className="bg-slate-800/20">
+                    {[
+                      { id: 'dil-bolge', label: 'Dil ve bölge' },
+                      { id: 'saat-dilimi', label: 'Saat dilimi' },
+                      { id: 'dunya-saati', label: 'Dünya saati' },
+                      { id: 'etkinlik-ayarlari', label: 'Etkinlik ayarları' },
+                      { id: 'bildirim-ayarlari', label: 'Bildirim ayarları' },
+                      { id: 'gorunum', label: 'Görünüm seçenekleri' },
+                      { id: 'workspace', label: 'Google Workspace akıllı özellikleri' },
+                      { id: 'klavye', label: 'Klavye kısayolları' }
+                    ].map((item) => (
+                      <button 
+                        key={item.id} 
+                        onClick={() => setSettingsSection(item.id)} 
+                        className={cn(
+                          "w-full text-left pl-12 pr-6 py-2.5 text-[13px] hover:bg-slate-800 transition-colors border-l-4 relative group",
+                          settingsSection === item.id ? "text-blue-400 border-blue-500 bg-blue-500/5" : "text-slate-400 border-transparent"
+                        )}
+                      >
+                        <div className="absolute left-6 top-0 bottom-0 w-[1px] bg-slate-700 group-first:top-1/2 group-last:bottom-1/2"></div>
+                        {item.label}
+                      </button>
+                    ))}
                   </div>
-                </section>
-
-                <section>
-                  <h3 className="text-2xl font-normal mb-8">Görünüm</h3>
-                  <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Karanlık Mod</span>
-                      <span className="text-sm text-slate-500">Göz yorgunluğunu azaltmak için karanlık temayı kullanın.</span>
-                    </div>
-                    <Checkbox defaultChecked className="w-6 h-6 border-slate-600 data-[state=checked]:bg-blue-500" />
-                  </div>
-                </section>
+                )}
+                <button onClick={() => setSettingsSection('takvim-ekle')} className={cn("w-full text-left px-6 py-3 hover:bg-slate-800 transition-colors", settingsSection === 'takvim-ekle' ? "bg-slate-800 text-blue-400" : "text-slate-300")}>Takvim Ekle</button>
               </div>
-            </div>
+            </aside>
+            <main className="flex-1 p-12 overflow-y-auto bg-[#202124]">
+              <div className="max-w-2xl mx-auto">
+                {settingsSection === 'dil-bolge' && (
+                  <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <h3 className="text-2xl font-normal mb-8">Dil ve bölge</h3>
+                    <div className="space-y-8">
+                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                        <Label className="text-slate-400">Dil</Label>
+                        <Select defaultValue="tr">
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                            <SelectItem value="tr">Türkçe</SelectItem>
+                            <SelectItem value="en">English</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                        <Label className="text-slate-400">Ülke</Label>
+                        <Select defaultValue="tr">
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                            <SelectItem value="tr">Türkiye</SelectItem>
+                            <SelectItem value="us">Amerika Birleşik Devletleri</SelectItem>
+                            <SelectItem value="de">Almanya</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </section>
+                )}
+                {settingsSection === 'gorunum' && (
+                  <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <h3 className="text-2xl font-normal mb-8">Görünüm seçenekleri</h3>
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                        <div>
+                          <div className="font-medium">Karanlık Mod</div>
+                          <div className="text-sm text-slate-500">Gözlerinizi dinlendirin.</div>
+                        </div>
+                        <Checkbox defaultChecked className="border-slate-600 data-[state=checked]:bg-blue-500" />
+                      </div>
+                      <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                        <div>
+                          <div className="font-medium">Haftasonlarını Göster</div>
+                          <div className="text-sm text-slate-500">Takvimde Cumartesi ve Pazar'ı göster.</div>
+                        </div>
+                        <Checkbox defaultChecked className="border-slate-600 data-[state=checked]:bg-blue-500" />
+                      </div>
+                    </div>
+                  </section>
+                )}
+                {settingsSection === 'takvim-ekle' && (
+                  <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <h3 className="text-2xl font-normal mb-8">Takvim Ekle</h3>
+                    <div className="bg-slate-800/30 p-8 rounded-xl border border-dashed border-slate-600 text-center space-y-4">
+                      <Plus className="w-12 h-12 text-slate-600 mx-auto" />
+                      <p className="text-slate-400">Takviminize ilgi alanlarınıza göre yeni etkinlikler ekleyin.</p>
+                      <Button onClick={() => setIsCountryModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">Ülke/Bölge Takvimi Ekle</Button>
+                    </div>
+                  </section>
+                )}
+                {['saat-dilimi', 'dunya-saati', 'etkinlik-ayarlari', 'bildirim-ayarlari', 'workspace', 'klavye'].includes(settingsSection) && (
+                  <div className="py-20 text-center text-slate-500 border border-dashed border-slate-700 rounded-xl">
+                    <HelpCircle className="w-10 h-10 mx-auto mb-4 opacity-20" />
+                    Bu bölüm ({settingsSection}) geliştirilme aşamasındadır.
+                  </div>
+                )}
+              </div>
+            </main>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Search Modal */}
-      <Dialog open={isSearchOpen} onOpenChange={(val) => { setIsSearchOpen(val); if(!val) document.body.style.pointerEvents = ""; }}>
-        <DialogContent className="sm:max-w-[600px] bg-[#202124] border-slate-700 text-white">
-          <VisuallyHidden><DialogTitle>Etkinlik Ara</DialogTitle></VisuallyHidden>
-          <div className="flex items-center gap-4 p-2">
-            <Search className="w-5 h-5 text-slate-500" />
-            <input className="flex-1 bg-transparent outline-none text-lg" placeholder="Etkinlik ara..." autoFocus />
-            <button onClick={() => setIsSearchOpen(false)} className="p-2 hover:bg-slate-800 rounded-full"><X className="w-5 h-5" /></button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* QR Modal */}
-      <Dialog open={isQrModalOpen} onOpenChange={(val) => { setIsQrModalOpen(val); if(!val) document.body.style.pointerEvents = ""; }}>
-        <DialogContent className="sm:max-w-[400px] bg-[#202124] border-slate-700 text-white">
+      {/* --- QR MODAL --- */}
+      <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-[#202124] border-slate-700 text-white p-0 overflow-hidden">
           <VisuallyHidden><DialogTitle>Randevu QR Kodu</DialogTitle></VisuallyHidden>
-          <DialogHeader><DialogTitle className="text-center">Randevu QR Kodu</DialogTitle></DialogHeader>
-          <div className="flex flex-col items-center gap-6 py-8">
+          <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+            <h2 className="font-semibold">Randevu QR Kodu</h2>
+            <button onClick={() => setIsQrModalOpen(false)} className="p-1 hover:bg-slate-700 rounded-full"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="flex flex-col items-center gap-6 py-10 px-6">
             <div className="p-4 bg-white rounded-2xl shadow-2xl border-4 border-blue-500/20">
-              <QRCodeSVG value={bookingLink} size={220} level="H" includeMargin={true} />
+              <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={220} level="H" includeMargin={true} />
             </div>
-            <div className="text-center space-y-2">
+            <div className="text-center space-y-3 w-full">
               <p className="text-sm text-slate-400">Bu QR kodu öğrencilerinize taratarak randevu almalarını sağlayabilirsiniz.</p>
-              <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-lg border border-slate-700">
-                <input readOnly value={bookingLink} className="bg-transparent text-xs text-blue-400 flex-1 outline-none truncate" />
-                <button onClick={() => { navigator.clipboard.writeText(bookingLink); toast({title:'Kopyalandı'}); }} className="p-1.5 hover:bg-slate-700 rounded"><LinkIcon className="w-4 h-4" /></button>
+              <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-lg border border-slate-700 w-full">
+                <input readOnly value={`${window.location.origin}/book/${user?.uid}/default`} className="bg-transparent text-xs text-blue-400 flex-1 outline-none truncate" />
+                <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/book/${user?.uid}/default`); toast({title:'Kopyalandı'}); }} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><LinkIcon className="w-4 h-4" /></button>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 rounded-full py-6" asChild>
-              <Link href={bookingLink} target="_blank"><ExternalLink className="w-4 h-4 mr-2" /> Sayfayı Görüntüle</Link>
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 rounded-full py-6 text-white font-medium shadow-lg" asChild>
+              <Link href={`/book/${user?.uid}/default`} target="_blank"><ExternalLink className="w-4 h-4 mr-2" /> Sayfayı Görüntüle</Link>
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Country Holiday Modal */}
-      <Dialog open={isCountryModalOpen} onOpenChange={(val) => { setIsCountryModalOpen(val); if(!val) document.body.style.pointerEvents = ""; }}>
-        <DialogContent className="sm:max-w-[400px] bg-[#202124] border-slate-700 text-white">
-          <VisuallyHidden><DialogTitle>Ülke Bayramı Ekle</DialogTitle></VisuallyHidden>
-          <DialogHeader><DialogTitle>Ülke Bayramı Ekle</DialogTitle><DialogDescription className="text-slate-500">Eklemek istediğiniz ülkenin 2 harfli kodunu girin (Örn: US, DE, FR).</DialogDescription></DialogHeader>
-          <div className="py-4 space-y-4">
+      {/* --- COUNTRY HOLIDAY MODAL --- */}
+      <Dialog open={isCountryModalOpen} onOpenChange={setIsCountryModalOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-[#202124] border-slate-700 text-white p-0">
+          <VisuallyHidden><DialogTitle>Takvim Ekle</DialogTitle></VisuallyHidden>
+          <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
+            <h2 className="font-semibold">Yeni Takvim Ekle</h2>
+            <button onClick={() => setIsCountryModalOpen(false)} className="p-1 hover:bg-slate-700 rounded-full"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-6 space-y-6">
             <div className="space-y-2">
-              <Label>Ülke Kodu (ISO)</Label>
-              <Input id="countryCode" placeholder="US" className="bg-slate-800 border-slate-700 text-white" onKeyDown={(e) => {
-                if(e.key === 'Enter') {
-                  const code = (e.target as HTMLInputElement).value.toUpperCase();
-                  if(code && !selectedCountries.includes(code)) {
-                    setSelectedCountries([...selectedCountries, code]);
-                    setIsCountryModalOpen(false);
-                    toast({title: 'Ülke eklendi', description: `${code} tatilleri yükleniyor...`});
+              <Label className="text-slate-400">Ülke Kodu (ISO)</Label>
+              <Input 
+                id="countryCode" 
+                placeholder="Örn: US, DE, SA, GB" 
+                className="bg-slate-800 border-slate-700 text-white focus:border-blue-500" 
+                onKeyDown={(e) => {
+                  if(e.key === 'Enter') {
+                    const code = (e.target as HTMLInputElement).value.toUpperCase();
+                    if(code && !selectedCountries.includes(code)) {
+                      setSelectedCountries([...selectedCountries, code]);
+                      setIsCountryModalOpen(false);
+                      toast({title: 'Takvim eklendi', description: `${code} verileri yükleniyor...`});
+                    }
                   }
-                }
-              }} />
+                }} 
+              />
+              <p className="text-[10px] text-slate-500">Girmek istediğiniz ülkenin iki harfli kodunu yazın.</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {selectedCountries.map(code => (
-                <div key={code} className="bg-blue-900/30 text-blue-400 px-2 py-1 rounded flex items-center gap-2 text-xs">
-                  {code}
-                  <button onClick={() => setSelectedCountries(selectedCountries.filter(c => c !== code))}><X className="w-3 h-3" /></button>
-                </div>
-              ))}
+            <div className="space-y-3">
+              <Label className="text-slate-400">Ekli Takvimler</Label>
+              <div className="flex flex-wrap gap-2">
+                {selectedCountries.map(code => (
+                  <div key={code} className="bg-blue-900/30 text-blue-400 px-3 py-1.5 rounded-full flex items-center gap-2 text-xs border border-blue-500/20">
+                    {code}
+                    <button onClick={() => setSelectedCountries(selectedCountries.filter(c => c !== code))} className="hover:text-red-400"><X className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </DialogContent>
