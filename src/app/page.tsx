@@ -12,7 +12,8 @@ import {
   deleteDoc, 
   doc, 
   serverTimestamp,
-  orderBy
+  orderBy,
+  where
 } from 'firebase/firestore';
 import { 
   format, 
@@ -30,7 +31,8 @@ import {
   subMonths,
   addDays as addDaysFn,
   subDays as subDaysFn,
-  isSameMonth
+  isSameMonth,
+  startOfToday
 } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { 
@@ -60,7 +62,11 @@ import {
   ChevronUp,
   MessageSquare,
   Send,
-  Sparkles
+  Sparkles,
+  Search as SearchIcon,
+  Trash2,
+  Bell,
+  MinusCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -97,6 +103,22 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { QRCodeSVG } from 'qrcode.react';
 import { calendarHelper } from '@/ai/flows/calendar-helper';
 
+// ISO Country List for Searchable Holidays
+const COUNTRY_LIST = [
+  { code: 'TR', name: 'Türkiye' },
+  { code: 'US', name: 'ABD' },
+  { code: 'DE', name: 'Almanya' },
+  { code: 'GB', name: 'Birleşik Krallık' },
+  { code: 'FR', name: 'Fransa' },
+  { code: 'ES', name: 'İspanya' },
+  { code: 'IT', name: 'İtalya' },
+  { code: 'SA', name: 'Suudi Arabistan' },
+  { code: 'JP', name: 'Japonya' },
+  { code: 'CN', name: 'Çin' },
+  { code: 'BR', name: 'Brezilya' },
+  { code: 'AZ', name: 'Azerbaycan' }
+];
+
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
@@ -121,17 +143,40 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const gridScrollRef = useRef<HTMLDivElement>(null);
   
+  // Settings UI States
+  const [hideWeekends, setHideWeekends] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [settingsSection, setSettingsSection] = useState('dil-bolge');
+  const [isGenelOpen, setIsGenelOpen] = useState(true);
+
+  // Event Form
+  const [activeEventTab, setActiveTab] = useState('Etkinlik');
   const [eventForm, setEventForm] = useState({
     title: '',
     description: '',
-    start: '',
-    end: '',
+    start: format(new Date(), "yyyy-MM-dd'T'09:00"),
+    end: format(new Date(), "yyyy-MM-dd'T'10:00"),
     type: 'personal',
     color: '#3b82f6',
     guests: '',
     location: '',
     reminder: '30',
     visibility: 'default'
+  });
+
+  // Appointment Schedule Form (Match Screenshot)
+  const [appointmentForm, setAppointmentForm] = useState({
+    title: '',
+    duration: '30',
+    schedule: [
+      { day: 1, name: 'Pzt', enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { day: 2, name: 'Sal', enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { day: 3, name: 'Çar', enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { day: 4, name: 'Per', enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { day: 5, name: 'Cum', enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { day: 6, name: 'Cmt', enabled: false, slots: [] },
+      { day: 0, name: 'Paz', enabled: false, slots: [] },
+    ]
   });
 
   const [filters, setFilters] = useState({
@@ -143,16 +188,12 @@ export default function DashboardPage() {
 
   const [holidays, setHolidays] = useState<any[]>([]);
   const [selectedCountries, setSelectedCountries] = useState(['TR']);
-  const [activeEventTab, setActiveTab] = useState('Etkinlik');
+  const [countrySearch, setCountrySearch] = useState('');
 
   // AI Helper State
   const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
   const [aiInput, setAiInput] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
-
-  // Settings UI State
-  const [settingsSection, setSettingsSection] = useState('dil-bolge');
-  const [isGenelOpen, setIsGenelOpen] = useState(true);
 
   // --- REFRESH CURRENT TIME & AUTO SCROLL ---
   useEffect(() => {
@@ -213,16 +254,24 @@ export default function DashboardPage() {
     const holidayEvents = filters.holiday ? holidays : [];
     const typedEvents = userEvents.filter(e => filters[e.type as keyof typeof filters]);
     const combined = [...typedEvents, ...holidayEvents];
-    return combined.map((e, idx) => ({ 
-      ...e, 
-      uniqueId: e.id || `h-${e.start}-${idx}`
-    }));
+    
+    // SORT BY DATE (Strict requirement)
+    return combined
+      .sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime())
+      .map((e, idx) => ({ 
+        ...e, 
+        uniqueId: e.id || `h-${e.start}-${idx}`
+      }));
   }, [eventsData, holidays, filters]);
 
   const weekDays = React.useMemo(() => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  }, [currentDate]);
+    let days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    if (hideWeekends) {
+      days = days.filter(d => getDay(d) !== 0 && getDay(d) !== 6);
+    }
+    return days;
+  }, [currentDate, hideWeekends]);
 
   const monthDays = React.useMemo(() => {
     const start = startOfMonth(currentDate);
@@ -279,21 +328,32 @@ export default function DashboardPage() {
   };
 
   const handleSaveEvent = async () => {
-    if (!user) {
-      toast({ title: 'Giriş Gerekli', description: 'Planlarınızı kaydetmek için lütfen giriş yapın.' });
-      return;
-    }
+    if (!user) return;
     try {
-      const start = new Date(eventForm.start).toISOString();
-      const end = new Date(eventForm.end).toISOString();
-      const eventData = { ...eventForm, start, end, userId: user.uid, updatedAt: serverTimestamp() };
-
-      if (selectedEvent) {
-        await updateDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id), eventData);
-        toast({ title: 'Güncellendi' });
+      if (activeEventTab === 'Randevu programı') {
+        // Handle teacher appointment schedule creation
+        await addDoc(collection(db, 'users', user.uid, 'bookingLinks'), {
+          title: appointmentForm.title || 'Randevu Programı',
+          durationMinutes: parseInt(appointmentForm.duration),
+          workingHours: appointmentForm.schedule,
+          active: true,
+          userId: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        toast({ title: 'Randevu programı oluşturuldu' });
       } else {
-        await addDoc(collection(db, 'users', user.uid, 'events'), { ...eventData, createdAt: serverTimestamp() });
-        toast({ title: 'Oluşturuldu' });
+        const start = new Date(eventForm.start).toISOString();
+        const end = new Date(eventForm.end).toISOString();
+        const eventData = { ...eventForm, start, end, userId: user.uid, updatedAt: serverTimestamp() };
+
+        if (selectedEvent) {
+          await updateDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id), eventData);
+          toast({ title: 'Güncellendi' });
+        } else {
+          await addDoc(collection(db, 'users', user.uid, 'events'), { ...eventData, createdAt: serverTimestamp() });
+          toast({ title: 'Oluşturuldu' });
+        }
       }
       setIsEventModalOpen(false);
     } catch (error) {
@@ -330,8 +390,9 @@ export default function DashboardPage() {
 
   const navigate = (dir: 'prev' | 'next' | 'today') => {
     if (dir === 'today') {
-      setCurrentDate(new Date());
-      setMiniCalendarMonth(new Date());
+      const today = new Date();
+      setCurrentDate(today);
+      setMiniCalendarMonth(today);
       return;
     }
     const amount = view === 'ay' ? 1 : view === 'hafta' ? 7 : 1;
@@ -348,16 +409,34 @@ export default function DashboardPage() {
   const headerTitle = React.useMemo(() => {
     if (view === 'ay') return format(currentDate, 'MMMM yyyy', { locale: tr });
     if (view === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: tr });
-    return `${format(weekDays[0], 'd MMMM')} – ${format(weekDays[6], 'd MMMM yyyy', { locale: tr })}`;
+    return `${format(weekDays[0], 'd')} – ${format(weekDays[weekDays.length - 1], 'd MMMM yyyy', { locale: tr })}`;
   }, [currentDate, weekDays, view]);
 
-  if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-white font-sans">Yükleniyor...</div>;
+  const filteredCountries = COUNTRY_LIST.filter(c => 
+    c.name.toLowerCase().includes(countrySearch.toLowerCase()) || 
+    c.code.toLowerCase().includes(countrySearch.toLowerCase())
+  );
+
+  const toggleDesktopNotifications = () => {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          setNotificationsEnabled(true);
+          toast({ title: 'Bildirimler açıldı' });
+        } else {
+          setNotificationsEnabled(false);
+        }
+      });
+    }
+  };
+
+  if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-white font-sans text-slate-800">Yükleniyor...</div>;
 
   return (
-    <div className="h-screen w-full flex flex-col bg-[#202124] overflow-hidden text-slate-200 font-sans">
+    <div className="h-screen w-full flex flex-col bg-[#202124] overflow-hidden text-slate-200 font-sans select-none">
       
       {/* --- HEADER --- */}
-      <header className="h-[64px] border-b border-slate-700 flex items-center px-4 justify-between shrink-0 bg-[#202124] z-30 shadow-sm">
+      <header className="h-[64px] border-b border-slate-700 flex items-center px-4 justify-between shrink-0 bg-[#202124] z-30">
         <div className="flex items-center gap-4">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-slate-800 rounded-full transition-colors">
             <Menu className="w-5 h-5 text-slate-300" />
@@ -450,7 +529,7 @@ export default function DashboardPage() {
                   <button onClick={() => setMiniCalendarMonth(addMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-slate-800 rounded-full transition-colors"><ChevronRight className="w-4 h-4 text-slate-300" /></button>
                 </div>
               </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-[11px] mb-2 text-slate-500 font-medium uppercase tracking-tighter">
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px] mb-2 text-slate-500 font-medium uppercase">
                 {['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'].map(d => <div key={d} className="w-8">{d}</div>)}
               </div>
               <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
@@ -495,7 +574,7 @@ export default function DashboardPage() {
                 <div className="space-y-1">
                   <label className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-slate-800 rounded-md transition-colors">
                     <Checkbox checked={filters.holiday} onCheckedChange={(checked) => setFilters({...filters, holiday: !!checked})} className="border-slate-600 data-[state=checked]:bg-emerald-500" />
-                    <span className="text-[13px] font-medium text-slate-300">Bayramlar & Tatiller</span>
+                    <span className="text-[13px] font-medium text-slate-300">Türkiye Bayramları</span>
                   </label>
                 </div>
               </div>
@@ -508,20 +587,13 @@ export default function DashboardPage() {
           {view !== 'plan' && (
             <div className="flex pr-[15px] shrink-0 border-b border-slate-700">
               <div className="w-[64px] shrink-0"></div>
-              <div className={cn("flex-1", view === 'ay' ? "grid grid-cols-7" : view === 'gün' ? "block" : "grid grid-cols-7")}>
-                {view === 'gün' ? (
-                  <div className="flex flex-col items-center justify-center py-4 gap-1 w-full">
-                    <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(currentDate) ? 'text-blue-400' : 'text-slate-500')}>{format(currentDate, 'eeee', { locale: tr })}</span>
-                    <div className={cn("w-[48px] h-[48px] flex items-center justify-center rounded-full", isToday(currentDate) ? 'bg-blue-600 text-white' : 'text-slate-200 hover:bg-slate-800')}><span className="text-[24px] font-medium">{format(currentDate, 'd')}</span></div>
-                  </div>
-                ) : (
-                  weekDays.map((day, i) => (
+              <div className={cn("flex-1", view === 'ay' ? "grid grid-cols-7" : "grid grid-cols-" + weekDays.length)}>
+                {weekDays.map((day, i) => (
                     <div key={i} className="flex flex-col items-center justify-center py-4 gap-1">
                       <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-blue-400' : 'text-slate-500')}>{format(day, 'eee', { locale: tr })}</span>
                       <div className={cn("w-[46px] h-[46px] flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-blue-600 text-white' : 'text-slate-200 hover:bg-slate-800')}><span className="text-[24px] font-medium">{format(day, 'd')}</span></div>
                     </div>
-                  ))
-                )}
+                ))}
               </div>
             </div>
           )}
@@ -538,7 +610,6 @@ export default function DashboardPage() {
                         {dayEvents.slice(0, 3).map((event: any) => (
                           <div key={event.uniqueId} className="text-[10px] px-1.5 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>{event.title}</div>
                         ))}
-                        {dayEvents.length > 3 && <div className="text-[9px] text-slate-500 pl-1">+{dayEvents.length - 3} daha</div>}
                       </div>
                     </div>
                   );
@@ -575,12 +646,12 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Day Grid */}
-                <div className={cn("flex-1 relative border-t border-slate-700", view === 'hafta' ? "grid grid-cols-7" : "block")}>
+                <div className={cn("flex-1 relative border-t border-slate-700 grid", "grid-cols-" + weekDays.length)}>
                   <div className="absolute inset-0 pointer-events-none">
                     {hours.map((_, i) => <div key={i} className="h-[80px] border-b border-slate-700 w-full"></div>)}
                   </div>
 
-                  {(view === 'gün' ? [currentDate] : weekDays).map((day, i) => {
+                  {weekDays.map((day, i) => {
                     const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day));
                     return (
                       <div key={i} className={cn("relative border-r border-slate-800 cursor-pointer hover:bg-slate-800/20 transition-colors", isToday(day) && "bg-blue-900/10")} onClick={(e) => { if (e.target === e.currentTarget) { const rect = e.currentTarget.getBoundingClientRect(); const y = e.clientY - rect.top; handleDateSelect(day, Math.floor(y / 80)); }}}>
@@ -631,12 +702,9 @@ export default function DashboardPage() {
                   <h3 className="font-medium text-blue-400 flex items-center gap-2"><HelpCircle className="w-4 h-4" /> Hızlı İpuçları</h3>
                   <ul className="text-xs text-slate-400 space-y-2 list-disc pl-4">
                     <li>Takvimde boş bir yere tıklayarak hızlıca etkinlik ekleyebilirsiniz.</li>
-                    <li>Sürükle bırak özelliği ile etkinliklerinizin zamanını değiştirebilirsiniz.</li>
-                    <li>Sol menüdeki '+' butonu ile farklı ülkelerin tatillerini ekleyebilirsiniz.</li>
                     <li>QR kodunuzu paylaşarak başkalarından randevu alabilirsiniz.</li>
                   </ul>
                 </div>
-                <p className="text-sm text-center text-slate-500">Asistan'a takviminizle ilgili her şeyi sorabilirsiniz.</p>
               </div>
             )}
             {aiMessages.map((msg, i) => (
@@ -647,10 +715,10 @@ export default function DashboardPage() {
             {isAiLoading && <div className="text-xs text-blue-400 animate-pulse ml-4">Asistan düşünüyor...</div>}
           </div>
           <div className="p-4 border-t border-slate-700 bg-[#202124]">
-            <div className="flex gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700 focus-within:border-blue-500 transition-colors">
+            <div className="flex gap-2 bg-slate-800 rounded-full px-4 py-2 border border-slate-700">
               <input 
                 className="flex-1 bg-transparent outline-none text-sm text-white" 
-                placeholder="Takvimi nasıl kullanırım? Etkinlik nasıl eklenir?..." 
+                placeholder="Takvimi nasıl kullanırım?..." 
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
@@ -661,20 +729,21 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- EVENT MODAL --- */}
+      {/* --- EVENT MODAL (MATCH SCREENSHOT) --- */}
       <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
         <DialogContent className="sm:max-w-[500px] bg-[#202124] border-slate-700 p-0 overflow-hidden shadow-2xl rounded-xl">
           <VisuallyHidden><DialogTitle>Etkinlik Düzenle</DialogTitle></VisuallyHidden>
           <div className="flex items-center justify-between p-2 bg-slate-800/20">
-            <button className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><Menu className="w-4 h-4" /></button>
-            <button onClick={() => setIsEventModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
+            <button onClick={() => setIsEventModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 ml-auto"><X className="w-5 h-5" /></button>
           </div>
           <div className="p-6 pt-2 space-y-6">
             <input 
               type="text" 
               placeholder="Başlık ekle" 
-              value={eventForm.title}
-              onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
+              value={activeEventTab === 'Randevu programı' ? appointmentForm.title : eventForm.title}
+              onChange={(e) => activeEventTab === 'Randevu programı' 
+                ? setAppointmentForm({...appointmentForm, title: e.target.value})
+                : setEventForm({...eventForm, title: e.target.value})}
               className="w-full bg-transparent text-[24px] text-white placeholder-slate-500 outline-none border-b-2 border-slate-700 focus:border-blue-400 pb-1 transition-colors"
               autoFocus
             />
@@ -683,65 +752,79 @@ export default function DashboardPage() {
                 <button key={tab} onClick={() => setActiveTab(tab)} className={cn("px-4 py-1.5 rounded-full text-sm font-medium transition-all", activeEventTab === tab ? "bg-blue-900/40 text-blue-300" : "text-slate-400 hover:bg-slate-800")}>{tab}</button>
               ))}
             </div>
-            <div className="space-y-5">
-              <div className="flex items-start gap-4">
-                <Clock className="w-5 h-5 text-slate-400 mt-1 shrink-0" />
-                <div className="flex flex-col gap-2 w-full">
-                  <div className="flex items-center gap-2">
-                    <input type="datetime-local" value={eventForm.start} onChange={(e) => setEventForm({...eventForm, start: e.target.value})} className="bg-slate-800/50 border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none" />
-                    <span className="text-slate-500">-</span>
-                    <input type="datetime-local" value={eventForm.end} onChange={(e) => setEventForm({...eventForm, end: e.target.value})} className="bg-slate-800/50 border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none" />
+
+            {activeEventTab === 'Randevu programı' ? (
+              <div className="space-y-6">
+                <div className="flex items-start gap-4">
+                  <Clock className="w-5 h-5 text-slate-400 mt-1" />
+                  <div className="flex-1 space-y-4">
+                    <Label className="text-slate-400 text-xs">Randevu süresi</Label>
+                    <Select value={appointmentForm.duration} onValueChange={(v) => setAppointmentForm({...appointmentForm, duration: v})}>
+                      <SelectTrigger className="w-32 bg-slate-800 border-slate-700">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="15">15 dak</SelectItem>
+                        <SelectItem value="30">30 dak</SelectItem>
+                        <SelectItem value="60">1 saat</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
+                
+                <div className="space-y-3">
+                   <Label className="text-slate-400 text-xs uppercase font-bold px-2">Genel müsaitlik durumu</Label>
+                   {appointmentForm.schedule.map((day, idx) => (
+                     <div key={day.day} className="flex items-center gap-3 px-2">
+                       <Checkbox checked={day.enabled} onCheckedChange={(v) => {
+                         const newSched = [...appointmentForm.schedule];
+                         newSched[idx].enabled = !!v;
+                         if (v && day.slots.length === 0) newSched[idx].slots = [{start:'09:00', end:'17:00'}];
+                         setAppointmentForm({...appointmentForm, schedule: newSched});
+                       }} />
+                       <span className="w-8 text-sm text-slate-300">{day.name}</span>
+                       {day.enabled ? (
+                         <div className="flex items-center gap-2">
+                           <Input className="w-20 h-8 bg-slate-800 border-slate-700 text-xs" value={day.slots[0]?.start} />
+                           <span className="text-slate-500">-</span>
+                           <Input className="w-20 h-8 bg-slate-800 border-slate-700 text-xs" value={day.slots[0]?.end} />
+                           <button className="p-1 hover:bg-slate-800 rounded-full text-slate-400"><Plus className="w-3 h-3" /></button>
+                         </div>
+                       ) : (
+                         <span className="text-slate-500 text-sm italic">Müsait değil</span>
+                       )}
+                     </div>
+                   ))}
+                </div>
               </div>
-              <div className="flex items-center gap-4 group">
-                <Users className="w-5 h-5 text-slate-400 shrink-0" />
-                <input type="text" placeholder="Davetli ekle" value={eventForm.guests} onChange={(e) => setEventForm({...eventForm, guests: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full border-b border-transparent focus:border-slate-700 pb-1" />
+            ) : (
+              <div className="space-y-5">
+                <div className="flex items-start gap-4">
+                  <Clock className="w-5 h-5 text-slate-400 mt-1 shrink-0" />
+                  <div className="flex flex-col gap-2 w-full">
+                    <div className="flex items-center gap-2">
+                      <input type="datetime-local" value={eventForm.start} onChange={(e) => setEventForm({...eventForm, start: e.target.value})} className="bg-slate-800/50 border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none" />
+                      <span className="text-slate-500">-</span>
+                      <input type="datetime-local" value={eventForm.end} onChange={(e) => setEventForm({...eventForm, end: e.target.value})} className="bg-slate-800/50 border border-slate-700 rounded px-2 py-1 text-sm text-white outline-none" />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 group">
+                  <Users className="w-5 h-5 text-slate-400 shrink-0" />
+                  <input type="text" placeholder="Davetli ekle" value={eventForm.guests} onChange={(e) => setEventForm({...eventForm, guests: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full border-b border-transparent focus:border-slate-700 pb-1" />
+                </div>
+                <div className="flex items-start gap-4 group">
+                  <AlignLeft className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
+                  <textarea placeholder="Açıklama ekle" value={eventForm.description} onChange={(e) => setEventForm({...eventForm, description: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full min-h-[60px] resize-none" />
+                </div>
               </div>
-              <div className="flex items-center gap-4 group">
-                <MapPin className="w-5 h-5 text-slate-400 shrink-0" />
-                <input type="text" placeholder="Konum ekle" value={eventForm.location} onChange={(e) => setEventForm({...eventForm, location: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full border-b border-transparent focus:border-slate-700 pb-1" />
-              </div>
-              <div className="flex items-start gap-4 group">
-                <AlignLeft className="w-5 h-5 text-slate-400 shrink-0 mt-1" />
-                <textarea placeholder="Açıklama ekle" value={eventForm.description} onChange={(e) => setEventForm({...eventForm, description: e.target.value})} className="bg-transparent text-sm text-slate-200 outline-none w-full min-h-[60px] resize-none" />
-              </div>
-              <div className="flex items-center gap-4">
-                <HelpCircle className="w-5 h-5 text-slate-400" />
-                <Select value={eventForm.reminder} onValueChange={(v) => setEventForm({...eventForm, reminder: v})}>
-                  <SelectTrigger className="bg-transparent border-none text-slate-300 focus:ring-0 p-0 h-auto">
-                    <SelectValue placeholder="Bildirim" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 text-white">
-                    <SelectItem value="10">10 dakika önce bildir</SelectItem>
-                    <SelectItem value="30">30 dakika önce bildir</SelectItem>
-                    <SelectItem value="60">1 saat önce bildir</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-4">
-                <MoreVertical className="w-5 h-5 text-slate-400" />
-                <Select value={eventForm.visibility} onValueChange={(v) => setEventForm({...eventForm, visibility: v})}>
-                  <SelectTrigger className="bg-transparent border-none text-slate-300 focus:ring-0 p-0 h-auto">
-                    <SelectValue placeholder="Görünürlük" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 text-white">
-                    <SelectItem value="default">Varsayılan görünürlük</SelectItem>
-                    <SelectItem value="public">Herkes görebilir</SelectItem>
-                    <SelectItem value="private">Gizli</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            )}
           </div>
-          <div className="p-4 bg-slate-800/10 border-t border-slate-700/50 flex items-center justify-between">
-            <button className="text-sm font-medium text-slate-400 hover:text-white px-3 py-1.5 rounded hover:bg-slate-800">Diğer seçenekler</button>
-            <div className="flex gap-3">
-              {selectedEvent && (
-                <button onClick={handleDeleteEvent} className="text-sm font-medium text-red-400 hover:bg-red-900/20 px-4 py-2 rounded-md">Sil</button>
-              )}
-              <button onClick={handleSaveEvent} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-full text-sm font-medium transition-all shadow-lg">Kaydet</button>
-            </div>
+          <div className="p-4 bg-slate-800/10 border-t border-slate-700/50 flex items-center justify-end gap-3">
+            {selectedEvent && (
+              <button onClick={handleDeleteEvent} className="text-sm font-medium text-red-400 hover:bg-red-900/20 px-4 py-2 rounded-md">Sil</button>
+            )}
+            <button onClick={handleSaveEvent} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-full text-sm font-medium transition-all shadow-lg">Kaydet</button>
           </div>
         </DialogContent>
       </Dialog>
@@ -765,13 +848,8 @@ export default function DashboardPage() {
                   <div className="bg-slate-800/20">
                     {[
                       { id: 'dil-bolge', label: 'Dil ve bölge' },
-                      { id: 'saat-dilimi', label: 'Saat dilimi' },
-                      { id: 'dunya-saati', label: 'Dünya saati' },
-                      { id: 'etkinlik-ayarlari', label: 'Etkinlik ayarları' },
                       { id: 'bildirim-ayarlari', label: 'Bildirim ayarları' },
                       { id: 'gorunum', label: 'Görünüm seçenekleri' },
-                      { id: 'workspace', label: 'Google Workspace akıllı özellikleri' },
-                      { id: 'klavye', label: 'Klavye kısayolları' }
                     ].map((item) => (
                       <button 
                         key={item.id} 
@@ -781,7 +859,6 @@ export default function DashboardPage() {
                           settingsSection === item.id ? "text-blue-400 border-blue-500 bg-blue-500/5" : "text-slate-400 border-transparent"
                         )}
                       >
-                        <div className="absolute left-6 top-0 bottom-0 w-[1px] bg-slate-700 group-first:top-1/2 group-last:bottom-1/2"></div>
                         {item.label}
                       </button>
                     ))}
@@ -793,69 +870,56 @@ export default function DashboardPage() {
             <main className="flex-1 p-12 overflow-y-auto bg-[#202124]">
               <div className="max-w-2xl mx-auto">
                 {settingsSection === 'dil-bolge' && (
-                  <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <section className="space-y-8 animate-in fade-in duration-300">
                     <h3 className="text-2xl font-normal mb-8">Dil ve bölge</h3>
                     <div className="space-y-8">
                       <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
                         <Label className="text-slate-400">Dil</Label>
                         <Select defaultValue="tr">
                           <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                          <SelectContent>
                             <SelectItem value="tr">Türkçe</SelectItem>
                             <SelectItem value="en">English</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
-                        <Label className="text-slate-400">Ülke</Label>
-                        <Select defaultValue="tr">
-                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                            <SelectItem value="tr">Türkiye</SelectItem>
-                            <SelectItem value="us">Amerika Birleşik Devletleri</SelectItem>
-                            <SelectItem value="de">Almanya</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    </div>
+                  </section>
+                )}
+                {settingsSection === 'bildirim-ayarlari' && (
+                  <section className="space-y-8 animate-in fade-in duration-300">
+                    <h3 className="text-2xl font-normal mb-8">Bildirim ayarları</h3>
+                    <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                      <div>
+                        <div className="font-medium">Masaüstü Bildirimleri</div>
+                        <div className="text-sm text-slate-500">Tarayıcı üzerinden önemli uyarılar alın.</div>
                       </div>
+                      <Checkbox checked={notificationsEnabled} onCheckedChange={toggleDesktopNotifications} className="border-slate-600 data-[state=checked]:bg-blue-500" />
                     </div>
                   </section>
                 )}
                 {settingsSection === 'gorunum' && (
-                  <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <section className="space-y-8 animate-in fade-in duration-300">
                     <h3 className="text-2xl font-normal mb-8">Görünüm seçenekleri</h3>
                     <div className="space-y-6">
                       <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
                         <div>
-                          <div className="font-medium">Karanlık Mod</div>
-                          <div className="text-sm text-slate-500">Gözlerinizi dinlendirin.</div>
-                        </div>
-                        <Checkbox defaultChecked className="border-slate-600 data-[state=checked]:bg-blue-500" />
-                      </div>
-                      <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
-                        <div>
-                          <div className="font-medium">Haftasonlarını Göster</div>
+                          <div className="font-medium">Hafta sonlarını göster</div>
                           <div className="text-sm text-slate-500">Takvimde Cumartesi ve Pazar'ı göster.</div>
                         </div>
-                        <Checkbox defaultChecked className="border-slate-600 data-[state=checked]:bg-blue-500" />
+                        <Checkbox checked={!hideWeekends} onCheckedChange={(v) => setHideWeekends(!v)} className="border-slate-600 data-[state=checked]:bg-blue-500" />
                       </div>
                     </div>
                   </section>
                 )}
                 {settingsSection === 'takvim-ekle' && (
-                  <section className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <section className="space-y-8 animate-in fade-in duration-300">
                     <h3 className="text-2xl font-normal mb-8">Takvim Ekle</h3>
                     <div className="bg-slate-800/30 p-8 rounded-xl border border-dashed border-slate-600 text-center space-y-4">
-                      <Plus className="w-12 h-12 text-slate-600 mx-auto" />
-                      <p className="text-slate-400">Takviminize ilgi alanlarınıza göre yeni etkinlikler ekleyin.</p>
-                      <Button onClick={() => setIsCountryModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">Ülke/Bölge Takvimi Ekle</Button>
+                      <p className="text-slate-400">İlgi alanlarınıza göre yeni bayram takvimleri ekleyin.</p>
+                      <Button onClick={() => setIsCountryModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">Ülke Bayramı Ekle</Button>
                     </div>
                   </section>
-                )}
-                {['saat-dilimi', 'dunya-saati', 'etkinlik-ayarlari', 'bildirim-ayarlari', 'workspace', 'klavye'].includes(settingsSection) && (
-                  <div className="py-20 text-center text-slate-500 border border-dashed border-slate-700 rounded-xl">
-                    <HelpCircle className="w-10 h-10 mx-auto mb-4 opacity-20" />
-                    Bu bölüm ({settingsSection}) geliştirilme aşamasındadır.
-                  </div>
                 )}
               </div>
             </main>
@@ -872,61 +936,56 @@ export default function DashboardPage() {
             <button onClick={() => setIsQrModalOpen(false)} className="p-1 hover:bg-slate-700 rounded-full"><X className="w-5 h-5" /></button>
           </div>
           <div className="flex flex-col items-center gap-6 py-10 px-6">
-            <div className="p-4 bg-white rounded-2xl shadow-2xl border-4 border-blue-500/20">
+            <div className="p-4 bg-white rounded-2xl shadow-2xl">
               <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={220} level="H" includeMargin={true} />
             </div>
             <div className="text-center space-y-3 w-full">
-              <p className="text-sm text-slate-400">Bu QR kodu öğrencilerinize taratarak randevu almalarını sağlayabilirsiniz.</p>
+              <p className="text-sm text-slate-400">Öğrencileriniz için randevu linki.</p>
               <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-lg border border-slate-700 w-full">
                 <input readOnly value={`${window.location.origin}/book/${user?.uid}/default`} className="bg-transparent text-xs text-blue-400 flex-1 outline-none truncate" />
                 <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/book/${user?.uid}/default`); toast({title:'Kopyalandı'}); }} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><LinkIcon className="w-4 h-4" /></button>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 rounded-full py-6 text-white font-medium shadow-lg" asChild>
-              <Link href={`/book/${user?.uid}/default`} target="_blank"><ExternalLink className="w-4 h-4 mr-2" /> Sayfayı Görüntüle</Link>
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* --- COUNTRY HOLIDAY MODAL --- */}
+      {/* --- SEARCHABLE COUNTRY HOLIDAY MODAL --- */}
       <Dialog open={isCountryModalOpen} onOpenChange={setIsCountryModalOpen}>
         <DialogContent className="sm:max-w-[400px] bg-[#202124] border-slate-700 text-white p-0">
           <VisuallyHidden><DialogTitle>Takvim Ekle</DialogTitle></VisuallyHidden>
           <div className="p-4 border-b border-slate-700 bg-slate-800/50 flex items-center justify-between">
-            <h2 className="font-semibold">Yeni Takvim Ekle</h2>
+            <h2 className="font-semibold">Ülke Takvimi Ekle</h2>
             <button onClick={() => setIsCountryModalOpen(false)} className="p-1 hover:bg-slate-700 rounded-full"><X className="w-5 h-5" /></button>
           </div>
-          <div className="p-6 space-y-6">
-            <div className="space-y-2">
-              <Label className="text-slate-400">Ülke Kodu (ISO)</Label>
+          <div className="p-4 space-y-4">
+            <div className="relative">
+              <SearchIcon className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
               <Input 
-                id="countryCode" 
-                placeholder="Örn: US, DE, SA, GB" 
-                className="bg-slate-800 border-slate-700 text-white focus:border-blue-500" 
-                onKeyDown={(e) => {
-                  if(e.key === 'Enter') {
-                    const code = (e.target as HTMLInputElement).value.toUpperCase();
-                    if(code && !selectedCountries.includes(code)) {
-                      setSelectedCountries([...selectedCountries, code]);
-                      setIsCountryModalOpen(false);
-                      toast({title: 'Takvim eklendi', description: `${code} verileri yükleniyor...`});
-                    }
-                  }
-                }} 
+                placeholder="Ülke ara (Örn: USA, Almanya...)" 
+                value={countrySearch}
+                onChange={(e) => setCountrySearch(e.target.value)}
+                className="pl-9 bg-slate-800 border-slate-700 text-white"
               />
-              <p className="text-[10px] text-slate-500">Girmek istediğiniz ülkenin iki harfli kodunu yazın.</p>
             </div>
-            <div className="space-y-3">
-              <Label className="text-slate-400">Ekli Takvimler</Label>
-              <div className="flex flex-wrap gap-2">
-                {selectedCountries.map(code => (
-                  <div key={code} className="bg-blue-900/30 text-blue-400 px-3 py-1.5 rounded-full flex items-center gap-2 text-xs border border-blue-500/20">
-                    {code}
-                    <button onClick={() => setSelectedCountries(selectedCountries.filter(c => c !== code))} className="hover:text-red-400"><X className="w-3 h-3" /></button>
-                  </div>
-                ))}
-              </div>
+            <div className="max-h-[300px] overflow-y-auto space-y-1">
+              {filteredCountries.map(c => (
+                <button 
+                  key={c.code}
+                  onClick={() => {
+                    if (!selectedCountries.includes(c.code)) {
+                      setSelectedCountries([...selectedCountries, c.code]);
+                      toast({ title: `${c.name} takvimi eklendi` });
+                    }
+                    setIsCountryModalOpen(false);
+                    setCountrySearch('');
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-800 rounded-md transition-colors text-sm"
+                >
+                  <span>{c.name}</span>
+                  <span className="text-slate-500 font-mono">{c.code}</span>
+                </button>
+              ))}
             </div>
           </div>
         </DialogContent>

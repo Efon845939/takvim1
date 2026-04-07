@@ -1,119 +1,41 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
      * Smart Calendar & Scheduling SaaS Security Rules
-     * 
-     * Philosophy:
-     * This ruleset implements a strict multi-tenant authorization model where data is 
-     * partitioned by User ID. Users have full ownership and control over their own 
-     * calendar events, availability settings, and booking configurations.
-     * 
-     * Data Structure:
-     * - /users/{userId}: Primary profile and global availability settings.
-     * - /users/{userId}/events/{eventId}: Private calendar entries (personal, meetings).
-     * - /users/{userId}/bookingLinks/{linkId}: Public-facing booking configurations.
-     * - /users/{userId}/bookings/{bookingId}: Records of appointments made by invitees.
-     * 
-     * Key Security Decisions:
-     * 1. Authorization Independence: Critical host data (timezone, name) is denormalized 
-     *    into BookingLinks to allow public access without exposing the full User profile.
-     * 2. Public Booking: Booking links are publicly readable if active, and invitees 
-     *    can create Booking records, but they cannot list or read existing ones.
-     * 3. Ownership Enforcement: All write operations on user-scoped paths require the 
-     *    authenticated UID to match the path's userId.
      */
 
-    // --- Global Helper Functions ---
-
-    /** @description Checks if the request is from an authenticated user. */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /** @description Checks if the authenticated user's UID matches the provided userId. */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** @description Checks if the document exists and the requester is the owner. */
-    function isExistingOwner(userId) {
-      return resource != null && isOwner(userId);
-    }
-
-    // --- Collection Rules ---
-
-    /**
-     * @description Rules for User profiles. Users can only manage their own profile.
-     * @path /users/{userId}
-     * @allow get (isOwner), create (isOwner), update (isOwner), delete (isOwner)
-     * @deny get (not owner), update (changing profile of another user)
-     * @principle Enforces strict user-ownership and self-creation.
-     */
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false; // Users cannot be listed for privacy.
-      
-      // Self-creation: User ID in data must match the document ID and Auth UID.
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      
-      // Ownership and immutability of the ID field.
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+      allow get: if true; // Public can get user profile for booking
+      allow list: if false;
+      allow create, update, delete: if isOwner(userId);
 
-      /**
-       * @description Rules for private calendar events. Completely restricted to the owner.
-       * @path /users/{userId}/events/{eventId}
-       * @allow get, list, create, update, delete (isOwner)
-       * @deny get, list (unauthenticated or different user)
-       * @principle Restricts access to a user's own data tree.
-       */
       match /events/{eventId} {
         allow get, list: if isOwner(userId);
-        
-        // Relational Integrity: Ensure the event's userId matches the path owner.
-        allow create: if isOwner(userId) && request.resource.data.userId == userId;
-        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-        allow delete: if isExistingOwner(userId);
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
       }
 
-      /**
-       * @description Rules for booking links. Publicly readable if active; managed by owner.
-       * @path /users/{userId}/bookingLinks/{linkId}
-       * @allow get (true), list (isOwner), create (isOwner), update (isOwner), delete (isOwner)
-       * @deny create, update (not owner)
-       * @principle Public Read with Owner-Only Writes.
-       */
       match /bookingLinks/{linkId} {
-        // Public get allowed to render the booking page. 
-        // Logic should ensure only active links are fetched, though rules are flexible here.
-        allow get: if true;
+        allow get: if true; // Public access for scan/link
         allow list: if isOwner(userId);
-
-        allow create: if isOwner(userId) && request.resource.data.userId == userId;
-        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-        allow delete: if isExistingOwner(userId);
+        allow create, update, delete: if isOwner(userId);
       }
 
-      /**
-       * @description Records of confirmed bookings. Created by public; managed by owner.
-       * @path /users/{userId}/bookings/{bookingId}
-       * @allow create (true), get (isOwner), list (isOwner), update (isOwner), delete (isOwner)
-       * @deny get, list (public/unauthenticated)
-       * @principle Permits public write for booking flow while protecting private details.
-       */
       match /bookings/{bookingId} {
-        // Owner has full control.
-        allow get, list: if isOwner(userId);
-        
-        // Public Create: Allows invitees to submit a booking.
-        // We validate that the booking is being associated with the correct host.
-        allow create: if request.resource.data.userId == userId;
-        
-        // Update and Delete are restricted to the host/owner.
-        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-        allow delete: if isExistingOwner(userId);
+        allow create: if true; // Public can create a booking
+        allow get, list, update, delete: if isOwner(userId);
       }
     }
   }
