@@ -263,13 +263,15 @@ export default function DashboardPage() {
   }, [eventsData, holidays, filters]);
 
   const weekDays = React.useMemo(() => {
+    if (view === 'gün') return [currentDate];
+    
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     let days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     if (hideWeekends) {
       days = days.filter(d => getDay(d) !== 0 && getDay(d) !== 6);
     }
     return days;
-  }, [currentDate, hideWeekends]);
+  }, [currentDate, hideWeekends, view]);
 
   const monthDays = React.useMemo(() => {
     const start = startOfMonth(currentDate);
@@ -292,7 +294,7 @@ export default function DashboardPage() {
     const start = setMinutes(setHours(date, hour), 0);
     const end = setMinutes(setHours(date, hour + 1), 0);
     setSelectedEvent(null);
-    setActiveTab('Etkinlik'); // Reset to event tab for grid click
+    setActiveTab('Etkinlik');
     setEventForm({
       title: '',
       description: '',
@@ -571,7 +573,7 @@ export default function DashboardPage() {
           {view !== 'plan' && (
             <div className="flex pr-[15px] shrink-0 border-b border-slate-700">
               <div className="w-[64px] shrink-0"></div>
-              <div className={cn("flex-1 grid", `grid-cols-${weekDays.length}`)}>
+              <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
                 {weekDays.map((day, i) => (
                     <div key={i} className="flex flex-col items-center justify-center py-4 gap-1">
                       <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-blue-400' : 'text-slate-500')}>{format(day, 'eee', { locale: tr })}</span>
@@ -628,7 +630,7 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                <div className={cn("flex-1 relative border-t border-slate-700 grid", `grid-cols-${weekDays.length}`)}>
+                <div className="flex-1 relative border-t border-slate-700 grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
                   <div className="absolute inset-0 pointer-events-none">
                     {hours.map((_, i) => <div key={i} className="h-[80px] border-b border-slate-700 w-full"></div>)}
                   </div>
