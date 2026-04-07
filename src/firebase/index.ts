@@ -1,40 +1,32 @@
 
 'use client';
 
-import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore'
+import { getFirestore } from 'firebase/firestore';
+import { firebaseConfig } from '@/firebase/config';
 
-// Vercel ve App Hosting uyumlu başlatma
+/**
+ * Initializes Firebase services safely for both client and server (Prerendering).
+ * Ensures only one instance exists.
+ */
 export function initializeFirebase() {
-  if (!getApps().length) {
-    let firebaseApp: FirebaseApp;
-    
-    // Eğer environment variable'lar varsa (Vercel) direkt onları kullan
-    if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "AIza...") {
-       firebaseApp = initializeApp(firebaseConfig);
-    } else {
-      try {
-        // App Hosting ortamı için otomatik deneme
-        firebaseApp = initializeApp();
-      } catch (e) {
-        // Fallback
-        firebaseApp = initializeApp(firebaseConfig);
-      }
-    }
+  let app: FirebaseApp;
 
-    return getSdks(firebaseApp);
+  if (!getApps().length) {
+    // Robust check for Vercel build time where env might be partially available
+    if (!firebaseConfig.apiKey) {
+      console.warn("Firebase API Key is missing. Check your environment variables.");
+    }
+    app = initializeApp(firebaseConfig);
+  } else {
+    app = getApp();
   }
 
-  return getSdks(getApp());
-}
-
-export function getSdks(firebaseApp: FirebaseApp) {
   return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp)
+    firebaseApp: app,
+    auth: getAuth(app),
+    firestore: getFirestore(app)
   };
 }
 

@@ -1,5 +1,4 @@
-
-"use client"
+'use client';
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,8 +23,12 @@ interface ReportCardProps {
   description?: string;
 }
 
+/**
+ * A reusable dashboard card for displaying metrics with icons.
+ * Fixed non-existent icon names (Fire -> Flame, Medical -> Stethoscope)
+ */
 export function ReportCard({ title, value, icon, color, description }: ReportCardProps) {
-  const IconComponent = {
+  const icons = {
     alert: AlertTriangle,
     calendar: Calendar,
     car: Car,
@@ -35,18 +38,20 @@ export function ReportCard({ title, value, icon, color, description }: ReportCar
     map: MapPin,
     medical: Stethoscope,
     users: Users
-  }[icon];
+  };
+
+  const IconComponent = icons[icon] || AlertTriangle;
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden bg-slate-900 border-slate-800 text-white shadow-md hover:shadow-lg transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        <CardTitle className="text-sm font-medium text-slate-400">{title}</CardTitle>
         <IconComponent className={cn("h-4 w-4", color)} />
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
         {description && (
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-slate-500 mt-1">
             {description}
           </p>
         )}
