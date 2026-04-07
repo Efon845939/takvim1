@@ -1,10 +1,10 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
      * Smart Calendar & Scheduling SaaS Security Rules
+     * Optimized for Public Booking Flow
      */
 
     function isSignedIn() {
@@ -16,26 +16,27 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if true; // Public can get user profile for booking
+      allow get: if true; // Public can get user profile for booking context
       allow list: if false;
       allow create, update, delete: if isOwner(userId);
 
       match /events/{eventId} {
-        allow get, list: if isOwner(userId);
-        allow create: if isOwner(userId);
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
+        // ALLOW PUBLIC LIST FOR AVAILABILITY CHECKING (MVP constraint without Cloud Functions)
+        allow list: if true; 
+        allow get: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId);
       }
 
       match /bookingLinks/{linkId} {
-        allow get: if true; // Public access for scan/link
+        allow get: if true; // Public access for booking page
         allow list: if isOwner(userId);
         allow create, update, delete: if isOwner(userId);
       }
 
       match /bookings/{bookingId} {
         allow create: if true; // Public can create a booking
-        allow get, list, update, delete: if isOwner(userId);
+        allow list: if true;   // Public can list to avoid double-booking
+        allow get, update, delete: if isOwner(userId);
       }
     }
   }
