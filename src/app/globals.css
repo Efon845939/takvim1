@@ -36,101 +36,7 @@
   }
 }
 
-/* FullCalendar Professional SaaS Overrides */
-.fc {
-  @apply font-sans border-none !important;
-  --fc-border-color: #e5e7eb;
-  --fc-today-bg-color: rgba(235, 245, 255, 0.4); /* Subtle light blue tint */
-  --fc-now-indicator-color: #ef4444;
-}
-
-.fc .fc-toolbar {
-  @apply hidden !important;
-}
-
-.fc-theme-standard td, .fc-theme-standard th {
-  @apply border-[#e5e7eb] !important;
-}
-
-.fc-theme-standard .fc-scrollgrid {
-  @apply border-none !important;
-}
-
-.fc-col-header-cell {
-  @apply bg-white py-2 border-b border-[#e5e7eb] !important;
-}
-
-.fc-col-header-cell-cushion {
-  @apply text-[#6b7280] no-underline hover:no-underline !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  gap: 2px !important;
-}
-
-/* Day name (e.g., PZT) */
-.fc-col-header-cell-cushion .day-name {
-  @apply text-[11px] font-semibold uppercase tracking-wider !important;
-}
-
-/* Date number (e.g., 30) */
-.fc-col-header-cell-cushion .day-number {
-  @apply text-[22px] font-medium text-[#111827] !important;
-}
-
-.fc-day-today .fc-col-header-cell-cushion .day-number {
-  @apply bg-primary text-white rounded-full w-10 h-10 flex items-center justify-center !important;
-}
-
-.fc-timegrid-slot {
-  @apply h-16 !important;
-}
-
-.fc-timegrid-slot-label {
-  @apply border-none align-top !important;
-}
-
-.fc-timegrid-slot-label-cushion {
-  @apply text-[11px] text-[#374151] font-medium uppercase pr-3 !important;
-  transform: translateY(-8px) !important;
-}
-
-.fc-v-event {
-  @apply rounded-md border-none px-2 py-1 shadow-sm transition-all hover:brightness-95 active:scale-95 !important;
-}
-
-.fc-event-title {
-  @apply text-[12px] font-semibold leading-tight !important;
-}
-
-/* Current Time Indicator */
-.fc-timegrid-now-indicator-line {
-  @apply border-red-500 border-t-2 z-10 !important;
-}
-
-.fc-timegrid-now-indicator-arrow {
-  @apply bg-red-500 rounded-full !important;
-  width: 10px !important;
-  height: 10px !important;
-  margin-top: -5px !important;
-  left: -5px !important;
-  border: none !important;
-}
-
-.fc-timegrid-now-indicator-arrow::before {
-  display: none !important;
-}
-
-.fc-timegrid-axis-cushion {
-  @apply hidden !important;
-}
-
-/* Hover effect on grid cells */
-.fc-timegrid-slot:hover {
-  @apply bg-[#f9fafb] cursor-pointer !important;
-}
-
-/* Scrollbar styling */
+/* Custom Scrollbar for better UI feel */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -142,4 +48,14 @@
 
 ::-webkit-scrollbar-thumb {
   @apply bg-slate-200 rounded-full hover:bg-slate-300;
+}
+
+/* Hide arrow icons in the mini calendar navigation since we use Lucide */
+.rdp-nav_button_previous, .rdp-nav_button_next {
+  @apply hidden !important;
+}
+
+/* Precision Grid Fixes */
+.grid-cols-7 {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
