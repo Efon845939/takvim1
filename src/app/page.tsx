@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useCollection, useAuth } from '@/firebase';
+import { useUser, useFirestore, useCollection, useAuth, useDoc } from '@/firebase';
 import { 
   collection, 
   query, 
@@ -11,7 +11,8 @@ import {
   updateDoc, 
   deleteDoc, 
   doc, 
-  serverTimestamp 
+  serverTimestamp,
+  where
 } from 'firebase/firestore';
 import { 
   format, 
@@ -20,7 +21,6 @@ import {
   isToday, 
   startOfMonth, 
   endOfMonth, 
-  eachDayOfInterval, 
   getDay,
   isSameDay,
   addWeeks,
@@ -55,7 +55,9 @@ import {
   Bell,
   Eye,
   Keyboard,
-  ArrowLeft
+  ArrowLeft,
+  QrCode,
+  ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -64,7 +66,8 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogFooter,
-  DialogDescription
+  DialogDescription,
+  DialogTrigger
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -88,12 +91,15 @@ import {
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function DashboardPage() {
   const { user, isUserLoading } = useUser();
   const db = useFirestore();
   const auth = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   // --- STATE ---
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -105,9 +111,11 @@ export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const gridScrollRef = useRef<HTMLDivElement>(null);
   
   const [eventForm, setEventForm] = useState({
     title: '',
@@ -125,11 +133,41 @@ export default function DashboardPage() {
     family: true,
   });
 
-  // --- REFRESH CURRENT TIME ---
+  const [holidays, setHolidays] = useState<any[]>([]);
+
+  // --- REFRESH CURRENT TIME & AUTO SCROLL ---
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    
+    // Auto scroll to 07:00 on load
+    if (gridScrollRef.current && (view === 'hafta' || view === 'gün')) {
+      gridScrollRef.current.scrollTop = 7 * 80;
+    }
+    
     return () => clearInterval(timer);
-  }, []);
+  }, [view]);
+
+  // --- FETCH HOLIDAYS ---
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      try {
+        const year = currentDate.getFullYear();
+        const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/TR`);
+        const data = await response.json();
+        setHolidays(data.map((h: any) => ({
+          id: h.date + h.localName,
+          title: h.localName,
+          start: h.date,
+          end: h.date,
+          type: 'holiday',
+          color: '#f59e0b'
+        })));
+      } catch (error) {
+        console.error('Holidays API failed:', error);
+      }
+    };
+    fetchHolidays();
+  }, [currentDate]);
 
   // --- FETCH DATA ---
   const eventsQuery = useMemo(() => {
@@ -138,6 +176,15 @@ export default function DashboardPage() {
   }, [db, user]);
 
   const { data: eventsData } = useCollection(eventsQuery as any);
+  
+  const userDocRef = useMemo(() => user ? doc(db, 'users', user.uid) : null, [db, user]);
+  const { data: userData } = useDoc(userDocRef as any);
+
+  const combinedEvents = useMemo(() => {
+    const userEvents = eventsData || [];
+    const holidayEvents = filters.holiday ? holidays : [];
+    return [...userEvents, ...holidayEvents];
+  }, [eventsData, holidays, filters.holiday]);
 
   // --- VIEW LOGIC ---
   const weekDays = useMemo(() => {
@@ -161,7 +208,7 @@ export default function DashboardPage() {
     return Array.from({ length: 42 }, (_, i) => addDays(calendarStart, i));
   }, [miniCalendarMonth]);
 
-  const hours = Array.from({ length: 17 }, (_, i) => i + 7); // 07:00 to 23:00
+  const hours = Array.from({ length: 24 }, (_, i) => i);
 
   // --- ACTIONS ---
   const handleDateSelect = (date: Date, hour: number) => {
@@ -181,6 +228,7 @@ export default function DashboardPage() {
   };
 
   const handleEventClick = (event: any) => {
+    if (event.type === 'holiday') return;
     setSelectedEvent(event);
     setEventForm({
       title: event.title,
@@ -239,6 +287,8 @@ export default function DashboardPage() {
     if (view === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: tr });
     return `${format(weekDays[0], 'd MMMM')} – ${format(weekDays[6], 'd MMMM yyyy', { locale: tr })}`;
   }, [currentDate, weekDays, view]);
+
+  const bookingLink = user ? `${typeof window !== 'undefined' ? window.location.origin : ''}/book/${user.uid}/default` : '';
 
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-white font-sans">Yükleniyor...</div>;
 
@@ -324,8 +374,15 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><Link href="/booking-links"><LinkIcon className="w-4 h-4 mr-2" /> Paylaşım Linkleri</Link></DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}><Settings className="w-4 h-4 mr-2" /> Ayarlar</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsQrModalOpen(true)}>
+                  <QrCode className="w-4 h-4 mr-2" /> Randevu QR & Link
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/booking-links"><LinkIcon className="w-4 h-4 mr-2" /> Paylaşım Linkleri</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
+                  <Settings className="w-4 h-4 mr-2" /> Ayarlar
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive font-medium" onClick={() => auth.signOut()}>
                   <LogOut className="w-4 h-4 mr-2" /> Çıkış Yap
@@ -335,14 +392,6 @@ export default function DashboardPage() {
           )}
         </div>
       </header>
-
-      {/* --- GUEST BAR --- */}
-      {!user && (
-        <div className="h-[36px] bg-slate-50 border-b px-4 flex items-center gap-2 text-[13px] font-medium text-slate-600 shrink-0">
-          <Info className="w-4 h-4 text-blue-600" />
-          Misafir Modu: Planlarınızı kalıcı olarak kaydetmek için giriş yapın.
-        </div>
-      )}
 
       {/* --- MAIN CONTENT --- */}
       <div className="flex flex-1 overflow-hidden">
@@ -411,8 +460,7 @@ export default function DashboardPage() {
                       <Checkbox 
                         checked={filters[filter.id as keyof typeof filters]} 
                         onCheckedChange={(checked) => setFilters({...filters, [filter.id]: !!checked})}
-                        className="border-slate-300 data-[state=checked]:border-none"
-                        style={{ backgroundColor: filters[filter.id as keyof typeof filters] ? filter.color : 'transparent' }}
+                        className="border-slate-300"
                       />
                       <span className="text-[13px] font-medium text-slate-700">{filter.label}</span>
                     </label>
@@ -430,8 +478,7 @@ export default function DashboardPage() {
                       <Checkbox 
                         checked={filters[filter.id as keyof typeof filters]} 
                         onCheckedChange={(checked) => setFilters({...filters, [filter.id]: !!checked})}
-                        className="border-slate-300 data-[state=checked]:border-none"
-                        style={{ backgroundColor: filters[filter.id as keyof typeof filters] ? filter.color : 'transparent' }}
+                        className="border-slate-300"
                       />
                       <span className="text-[13px] font-medium text-slate-700">{filter.label}</span>
                     </label>
@@ -444,6 +491,12 @@ export default function DashboardPage() {
 
         {/* Calendar Grid Area */}
         <main className="flex-1 flex flex-col overflow-hidden bg-white">
+          {!user && (
+            <div className="bg-blue-50 py-1 px-4 text-center text-xs text-blue-600 font-medium">
+              Misafir Modu: Planlarınızı kalıcı olarak kaydetmek için giriş yapın.
+            </div>
+          )}
+          
           {/* Day Headers */}
           <div className="flex pr-[15px] shrink-0">
             <div className="w-[64px] shrink-0 border-r border-transparent"></div>
@@ -479,7 +532,7 @@ export default function DashboardPage() {
           {view === 'ay' ? (
             <div className="flex-1 overflow-y-auto grid grid-cols-7 grid-rows-6">
               {monthDays.map((day, i) => {
-                const dayEvents = eventsData?.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
+                const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
                 return (
                   <div key={i} className={cn("border-r border-b border-slate-100 p-2 min-h-[120px] hover:bg-slate-50 transition-colors cursor-pointer", !isSameMonth(day, currentDate) && "bg-slate-50/50")}>
                     <div className={cn("text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full mx-auto", isToday(day) ? "bg-blue-600 text-white" : "text-slate-600")}>
@@ -498,7 +551,7 @@ export default function DashboardPage() {
               })}
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto relative flex">
+            <div ref={gridScrollRef} className="flex-1 overflow-y-auto relative flex">
               {/* Time Column */}
               <div className="w-[64px] shrink-0 relative bg-white z-10 border-r border-slate-100">
                 {hours.map((hour, i) => (
@@ -521,21 +574,21 @@ export default function DashboardPage() {
 
                 {/* Day Columns */}
                 {(view === 'gün' ? [currentDate] : weekDays).map((day, i) => {
-                  const dayEvents = eventsData?.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
+                  const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day) && filters[e.type as keyof typeof filters]) || [];
                   return (
-                    <div key={i} className={cn("relative border-r border-[#f1f5f9] min-h-[1360px] cursor-pointer hover:bg-slate-50/30 transition-colors", isToday(day) && "bg-blue-50/20")}
+                    <div key={i} className={cn("relative border-r border-[#f1f5f9] min-h-[1920px] cursor-pointer hover:bg-slate-50/30 transition-colors", isToday(day) && "bg-blue-50/20")}
                       onClick={(e) => {
                         if (e.target === e.currentTarget) {
                           const rect = e.currentTarget.getBoundingClientRect();
                           const y = e.clientY - rect.top;
-                          const hour = Math.floor(y / 80) + 7;
+                          const hour = Math.floor(y / 80);
                           handleDateSelect(day, hour);
                         }
                       }}
                     >
                       {/* Current Time Line */}
-                      {isToday(day) && currentTime.getHours() >= 7 && currentTime.getHours() < 24 && (
-                        <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${(currentTime.getHours() - 7) * 80 + (currentTime.getMinutes() / 60) * 80}px` }}>
+                      {isToday(day) && (
+                        <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${(currentTime.getHours()) * 80 + (currentTime.getMinutes() / 60) * 80}px` }}>
                           <div className="h-[2px] bg-red-500 w-full relative">
                             <div className="w-3 h-3 bg-red-500 rounded-full absolute -top-[5px] -left-[6px] shadow-sm"></div>
                           </div>
@@ -546,7 +599,7 @@ export default function DashboardPage() {
                       {dayEvents.map((event: any) => {
                         const start = parseISO(event.start);
                         const end = parseISO(event.end);
-                        const top = (start.getHours() - 7) * 80 + (start.getMinutes() / 60) * 80;
+                        const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
                         const height = (differenceInMinutes(end, start) / 60) * 80;
                         return (
                           <div key={event.id} className="absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-sm border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden"
@@ -572,6 +625,7 @@ export default function DashboardPage() {
       {/* Event Modal */}
       <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
+          <VisuallyHidden><DialogTitle>Etkinlik Düzenle</DialogTitle></VisuallyHidden>
           <DialogHeader>
             <DialogTitle>{selectedEvent ? 'Planı Düzenle' : 'Yeni Plan Oluştur'}</DialogTitle>
             {!user && <DialogDescription className="text-amber-600 font-medium">Lütfen kaydetmek için giriş yapın.</DialogDescription>}
@@ -625,20 +679,53 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Settings Modal (Google Style Dark Panel) */}
+      {/* QR Modal */}
+      <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <VisuallyHidden><DialogTitle>Randevu Linki</DialogTitle></VisuallyHidden>
+          <DialogHeader>
+            <DialogTitle>Randevu Linki & QR</DialogTitle>
+            <DialogDescription>Öğrencileriniz bu link üzerinden randevu alabilir.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-6 py-6">
+            <div className="p-4 bg-white rounded-xl shadow-inner">
+              <QRCodeSVG value={bookingLink} size={200} />
+            </div>
+            <div className="w-full space-y-2">
+              <Label>Randevu Linki</Label>
+              <div className="flex gap-2">
+                <Input value={bookingLink} readOnly className="bg-slate-50" />
+                <Button variant="outline" size="icon" onClick={() => {
+                  navigator.clipboard.writeText(bookingLink);
+                  toast({ title: 'Kopyalandı' });
+                }}>
+                  <LinkIcon className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+            <Button className="w-full" asChild>
+              <Link href={`/book/${user?.uid}/default`} target="_blank">
+                <ExternalLink className="w-4 h-4 mr-2" /> Sayfayı Görüntüle
+              </Link>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings Modal */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-[100vw] h-[100vh] p-0 m-0 border-none rounded-none bg-[#1f1f1f] text-white overflow-hidden flex flex-col">
+          <VisuallyHidden><DialogTitle>Ayarlar</DialogTitle></VisuallyHidden>
           <div className="h-16 border-b border-slate-700 flex items-center px-6 justify-between shrink-0">
             <div className="flex items-center gap-4">
               <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-800 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
               <h2 className="text-xl">Ayarlar</h2>
             </div>
-            <button onClick={() => setIsSettingsOpen(false)} className="p-2 hover:bg-slate-800 rounded-full"><X className="w-6 h-6" /></button>
           </div>
           <div className="flex-1 flex overflow-hidden">
             <aside className="w-[300px] border-r border-slate-700 p-4 shrink-0 overflow-y-auto hidden md:block">
               <nav className="space-y-1">
-                {['Genel', 'İçe ve dışa aktar', 'Takvimlerimin ayarları', 'Diğer takvimlerin ayarları'].map((cat, i) => (
+                {['Genel', 'İçe ve dışa aktar', 'Görünüm', 'Bildirimler'].map((cat, i) => (
                   <div key={i} className="py-2 px-4 text-[14px] font-medium text-slate-400 cursor-pointer hover:text-white transition-colors">
                     {cat}
                   </div>
@@ -656,9 +743,9 @@ export default function DashboardPage() {
                       <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent></Select>
                     </div>
                     <div className="grid grid-cols-2 gap-8 items-center">
-                      <Label className="text-slate-300">Ülke</Label>
+                      <Label className="text-slate-300">Zaman Dilimi</Label>
                       <Select defaultValue="tr"><SelectTrigger className="bg-[#2d2d2d] border-none"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="tr">Türkiye</SelectItem></SelectContent></Select>
+                      <SelectContent><SelectItem value="tr">İstanbul (GMT+03:00)</SelectItem></SelectContent></Select>
                     </div>
                   </div>
                 </section>
@@ -668,20 +755,8 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-slate-300">Tema</span>
                       <Select defaultValue="dark"><SelectTrigger className="w-32 bg-[#2d2d2d] border-none"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="light">Açık</SelectItem><SelectItem value="dark">Koyu</SelectItem><SelectItem value="system">Sistem</SelectItem></SelectContent></Select>
+                      <SelectContent><SelectItem value="light">Açık</SelectItem><SelectItem value="dark">Koyu</SelectItem></SelectContent></Select>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-300">Hafta başlangıcı</span>
-                      <Select defaultValue="mon"><SelectTrigger className="w-40 bg-[#2d2d2d] border-none"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="mon">Pazartesi</SelectItem><SelectItem value="sun">Pazar</SelectItem></SelectContent></Select>
-                    </div>
-                  </div>
-                </section>
-                <section>
-                  <h3 className="text-2xl mb-6">Bildirimler</h3>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-300">Masaüstü bildirimlerini etkinleştir</span>
-                    <Checkbox className="border-slate-500" />
                   </div>
                 </section>
               </div>
@@ -693,6 +768,7 @@ export default function DashboardPage() {
       {/* Search Modal */}
       <Dialog open={isSearchOpen} onOpenChange={setIsSearchOpen}>
         <DialogContent className="sm:max-w-[600px] top-[20%] translate-y-0 p-0 overflow-hidden border-none shadow-2xl">
+          <VisuallyHidden><DialogTitle>Arama</DialogTitle></VisuallyHidden>
           <div className="flex items-center px-4 h-14 bg-white border-b">
             <Search className="w-5 h-5 text-slate-400 mr-3" />
             <input className="flex-1 outline-none text-[15px] placeholder:text-slate-400" placeholder="Etkinlik, kişi veya tarih arayın" autoFocus />
@@ -707,6 +783,7 @@ export default function DashboardPage() {
       {/* Info Modal */}
       <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
         <DialogContent className="sm:max-w-[425px]">
+          <VisuallyHidden><DialogTitle>Yardım</DialogTitle></VisuallyHidden>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <HelpCircle className="w-5 h-5 text-blue-600" />
@@ -715,16 +792,12 @@ export default function DashboardPage() {
           </DialogHeader>
           <div className="space-y-4 py-4 text-[14px] text-slate-600">
             <div className="space-y-2">
-              <h4 className="font-bold text-slate-800">Nasıl etkinlik eklenir?</h4>
-              <p>Takvim üzerindeki herhangi bir saat dilimine tıklayarak veya sol üstteki "Oluştur" butonuna basarak hızlıca plan ekleyebilirsiniz.</p>
+              <h4 className="font-bold text-slate-800">Nasıl randevu linki oluştururum?</h4>
+              <p>Sağ üstteki profil fotoğrafınıza tıklayıp "Randevu QR & Link" seçeneğini seçerek size özel oluşturulan linki kopyalayabilirsiniz.</p>
             </div>
             <div className="space-y-2">
-              <h4 className="font-bold text-slate-800">Görünüm nasıl değiştirilir?</h4>
-              <p>Sağ üstteki açılır menüden "Gün", "Hafta" veya "Ay" seçeneklerini kullanarak takvim görünümünü özelleştirebilirsiniz.</p>
-            </div>
-            <div className="space-y-2">
-              <h4 className="font-bold text-slate-800">Mini Takvim ne işe yarar?</h4>
-              <p>Sol taraftaki mini takvimden herhangi bir güne tıklayarak ana takvimi o tarihe hızlıca odaklayabilirsiniz.</p>
+              <h4 className="font-bold text-slate-800">Öğrenciler nasıl randevu alır?</h4>
+              <p>Öğrenciler QR kodunuzu taratarak veya linke tıklayarak, müsait olduğunuz saatlerden birini seçip adlarını girmeleri yeterlidir.</p>
             </div>
           </div>
           <DialogFooter>
@@ -735,4 +808,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
