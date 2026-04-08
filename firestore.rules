@@ -3,10 +3,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    /**
-     * V9 Security Rules - Public Availability Enabled
-     */
-
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,38 +12,29 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Public can read basic profile and authorized roles can update
       allow get: if true;
       allow list: if false;
       allow create, update, delete: if isOwner(userId);
 
       match /events/{eventId} {
-        // Essential: Allow public list/get for availability checks in /book pages
-        allow list: if true; 
-        allow get: if true;
+        allow list, get: if true; 
         allow create, update, delete: if isOwner(userId);
       }
 
       match /bookingLinks/{linkId} {
-        // Essential: Public access for shareable links
-        allow get: if true;
-        allow list: if true;
+        allow get, list: if true;
         allow create, update, delete: if isOwner(userId);
       }
 
       match /bookings/{bookingId} {
-        // Essential: Public can book and verify slots
         allow create: if true;
-        allow list: if true;
-        allow get: if true;
+        allow list, get: if true;
         allow update, delete: if isOwner(userId);
       }
     }
 
     match /appointments/{appointmentId} {
-      allow create: if true;
-      allow list: if true;
-      allow get: if true;
+      allow create, list, get: if true;
       allow update, delete: if isSignedIn();
     }
   }

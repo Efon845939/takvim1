@@ -8,11 +8,8 @@ import { firebaseConfig as staticConfig } from '@/firebase/config';
 
 /**
  * Initializes Firebase services safely for both client and server (Prerendering).
- * Ensures only one instance exists and uses environment variables with fallbacks.
  */
 export function initializeFirebase() {
-  let app: FirebaseApp;
-
   const resolvedConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || staticConfig.apiKey,
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || staticConfig.authDomain,
@@ -22,11 +19,9 @@ export function initializeFirebase() {
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || staticConfig.appId,
   };
 
-  if (getApps().length > 0) {
-    app = getApp();
-  } else {
-    app = initializeApp(resolvedConfig);
-  }
+  const app: FirebaseApp = getApps().length > 0 
+    ? getApp() 
+    : initializeApp(resolvedConfig);
 
   return {
     firebaseApp: app,
