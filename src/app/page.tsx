@@ -246,7 +246,9 @@ export default function DashboardPage() {
   
   const { data: userData } = useDoc(userDocRef);
 
-  const isTeacher = userData?.role === 'teacher' || user?.email === 'proturkgamerefe@gmail.com';
+  const teacherEmails = ['proturkgamerefe@gmail.com', 'sintiya.ugur@bahcesehir.k12.tr'];
+  const userEmail = user?.email?.toLowerCase();
+  const isTeacher = userData?.role === 'teacher' || (userEmail ? teacherEmails.includes(userEmail) : false);
 
   const combinedEvents = React.useMemo(() => {
     const userEvents = eventsData || [];
