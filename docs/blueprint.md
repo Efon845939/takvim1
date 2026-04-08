@@ -1,4 +1,4 @@
-# **App Name**: Randevu Hoca
+# **App Name**: Takvimer
 
 ## Core Features:
 

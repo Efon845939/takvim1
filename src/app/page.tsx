@@ -420,7 +420,7 @@ export default function DashboardPage() {
           </button>
           <div className="flex items-center gap-2 mr-4">
             <img src="/icon.png" alt="Logo" className="w-8 h-8 rounded-md" />
-            <span className="text-xl text-white font-medium tracking-tight">Takvim</span>
+            <span className="text-xl text-white font-medium tracking-tight">Takvimer</span>
           </div>
           
           <div className="flex items-center gap-2">

@@ -8,7 +8,7 @@ import { Toaster } from '@/components/ui/toaster';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Randevu Hoca | Akıllı Takvim ve Planlama',
+  title: 'Takvimer | Akıllı Takvim ve Planlama',
   description: 'SaaS tabanlı akıllı takvim ve randevu yönetim sistemi.',
   icons: {
     icon: '/icon.png',
