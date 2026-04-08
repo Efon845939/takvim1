@@ -33,8 +33,12 @@ export default function RegisterPage() {
 
       await updateProfile(user, { displayName: name });
 
-      // RBAC: Grant teacher role for specific email
-      const role = email.toLowerCase() === 'proturkgamerefe@gmail.com' ? 'teacher' : 'student';
+      // RBAC: Grant teacher role for specific authorized emails
+      const authorizedTeachers = [
+        "proturkgamerefe@gmail.com",
+        "sintiya.ugur@bahcesehir.k12.tr"
+      ];
+      const role = authorizedTeachers.includes(email.toLowerCase()) ? 'teacher' : 'student';
 
       // Initialize user document
       await setDoc(doc(db, 'users', user.uid), {
@@ -57,7 +61,10 @@ export default function RegisterPage() {
         updatedAt: serverTimestamp(),
       });
 
-      toast({ title: 'Başarılı', description: `Hoş geldiniz, ${role === 'teacher' ? 'Hocam' : name}!` });
+      toast({ 
+        title: 'Başarılı', 
+        description: `Hoş geldiniz, ${role === 'teacher' ? 'Hocam' : name}!` 
+      });
       router.push('/');
     } catch (error: any) {
       toast({

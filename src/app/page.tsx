@@ -69,7 +69,9 @@ import {
   MinusCircle,
   Keyboard,
   Zap,
-  Mail
+  Mail,
+  Copy,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -106,6 +108,7 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { QRCodeSVG } from 'qrcode.react';
 import { calendarHelper } from '@/ai/flows/calendar-helper';
 import { Switch } from '@/components/ui/switch';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const COUNTRY_LIST = [
   { code: 'TR', name: 'Türkiye' },
@@ -147,7 +150,7 @@ export default function DashboardPage() {
   // Settings UI States
   const [hideWeekends, setHideWeekends] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [settingsSection, setSettingsSection] = useState('dil-bolge');
+  const [settingsSection, setSettingsSection] = useState('genel');
   const [isGenelOpen, setIsGenelOpen] = useState(true);
 
   // Event Form
@@ -165,19 +168,30 @@ export default function DashboardPage() {
     visibility: 'default'
   });
 
-  // Appointment Schedule Form
+  // Appointment Schedule Form (V9 Exact Clone Structure)
   const [appointmentForm, setAppointmentForm] = useState({
     title: '',
     duration: '30',
+    repeatType: 'everyWeek',
     schedule: [
-      { dayOfWeek: 1, enabled: false, slots: [] as any[] },
-      { dayOfWeek: 2, enabled: true, slots: [{ start: '08:45', end: '11:50' }] },
-      { dayOfWeek: 3, enabled: true, slots: [{ start: '08:45', end: '09:25' }, { start: '10:25', end: '10:55' }, { start: '11:05', end: '11:35' }] },
-      { dayOfWeek: 4, enabled: true, slots: [{ start: '12:00', end: '12:30' }] },
-      { dayOfWeek: 5, enabled: true, slots: [{ start: '08:45', end: '11:50' }] },
+      { dayOfWeek: 1, enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { dayOfWeek: 2, enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { dayOfWeek: 3, enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { dayOfWeek: 4, enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
+      { dayOfWeek: 5, enabled: true, slots: [{ start: '09:00', end: '17:00' }] },
       { dayOfWeek: 6, enabled: false, slots: [] as any[] },
       { dayOfWeek: 0, enabled: false, slots: [] as any[] },
-    ]
+    ],
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    planningWindow: {
+      startInDays: 60,
+      minLeadTimeInHours: 4
+    },
+    bookedSettings: {
+      bufferBefore: 0,
+      bufferAfter: 0,
+      maxPerDay: 0
+    }
   });
 
   const [filters, setFilters] = useState({
@@ -246,7 +260,8 @@ export default function DashboardPage() {
   
   const { data: userData } = useDoc(userDocRef);
 
-  const isTeacher = userData?.role === 'teacher' || user?.email === 'proturkgamerefe@gmail.com';
+  // RBAC: Check for dual-authorized teachers
+  const isTeacher = ["proturkgamerefe@gmail.com", "sintiya.ugur@bahcesehir.k12.tr"].includes(user?.email || "");
 
   const combinedEvents = React.useMemo(() => {
     const userEvents = eventsData || [];
@@ -334,9 +349,9 @@ export default function DashboardPage() {
     try {
       if (activeEventTab === 'Randevu programı') {
         await addDoc(collection(db, 'users', user.uid, 'bookingLinks'), {
+          ...appointmentForm,
           title: appointmentForm.title || 'Görüşme Randevusu',
           durationMinutes: parseInt(appointmentForm.duration),
-          workingHours: appointmentForm.schedule,
           active: true,
           userId: user.uid,
           createdAt: serverTimestamp(),
@@ -713,14 +728,21 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- EVENT MODAL --- */}
+      {/* --- EVENT MODAL / APPOINTMENT SIDEBAR --- */}
       <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-[#202124] border-slate-700 p-0 overflow-hidden shadow-2xl rounded-xl">
+        <DialogContent className={cn(
+          "bg-[#202124] border-slate-700 p-0 overflow-hidden shadow-2xl rounded-xl transition-all",
+          activeEventTab === 'Randevu programı' 
+            ? "sm:max-w-[450px] fixed left-0 top-0 h-full rounded-none border-r" 
+            : "sm:max-w-[550px]"
+        )}>
           <VisuallyHidden><DialogTitle>Etkinlik Düzenle</DialogTitle></VisuallyHidden>
+          
           <div className="flex items-center justify-between p-2 bg-slate-800/20">
             <button onClick={() => setIsEventModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 ml-auto"><X className="w-5 h-5" /></button>
           </div>
-          <div className="p-6 pt-2 space-y-6">
+
+          <div className="p-6 pt-2 space-y-6 flex flex-col h-full overflow-hidden">
             <input 
               type="text" 
               placeholder="Başlık ekle" 
@@ -731,6 +753,7 @@ export default function DashboardPage() {
               className="w-full bg-transparent text-[24px] text-white placeholder-slate-500 outline-none border-b-2 border-slate-700 focus:border-blue-400 pb-1 transition-colors"
               autoFocus
             />
+            
             <div className="flex gap-2">
               {['Etkinlik', 'Görev', 'Randevu programı'].map(tab => {
                 if (tab === 'Randevu programı' && !isTeacher) return null;
@@ -741,19 +764,19 @@ export default function DashboardPage() {
             </div>
 
             {activeEventTab === 'Randevu programı' ? (
-              <div className="space-y-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pr-2 pb-20">
                 <div className="flex items-start gap-4">
                   <Clock className="w-5 h-5 text-slate-400 mt-1" />
                   <div className="flex-1 space-y-4">
-                    <Label className="text-slate-400 text-xs">Randevu süresi</Label>
+                    <Label className="text-slate-400 text-xs uppercase font-bold">Randevu süresi</Label>
                     <Select value={appointmentForm.duration} onValueChange={(v) => setAppointmentForm({...appointmentForm, duration: v})}>
-                      <SelectTrigger className="w-32 bg-slate-800 border-slate-700 text-white">
+                      <SelectTrigger className="w-full bg-slate-800 border-slate-700 text-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="15">15 dak</SelectItem>
-                        <SelectItem value="30">30 dak</SelectItem>
-                        <SelectItem value="45">45 dak</SelectItem>
+                        <SelectItem value="15">15 dakika</SelectItem>
+                        <SelectItem value="30">30 dakika</SelectItem>
+                        <SelectItem value="45">45 dakika</SelectItem>
                         <SelectItem value="60">1 saat</SelectItem>
                         <SelectItem value="90">1.5 saat</SelectItem>
                       </SelectContent>
@@ -761,26 +784,37 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 
-                <div className="space-y-3">
-                   <Label className="text-slate-400 text-xs uppercase font-bold px-2">Genel müsaitlik durumu</Label>
+                <div className="space-y-4">
+                   <div className="flex items-center justify-between px-2">
+                     <Label className="text-slate-400 text-xs uppercase font-bold">Genel müsaitlik durumu</Label>
+                     <button className="text-[10px] text-blue-400 hover:underline">Her hafta tekrarla</button>
+                   </div>
+                   
                    {appointmentForm.schedule.map((day, idx) => {
-                     const dayNames = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+                     const dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+                     // Mapping 1-5 for weekdays as per requested teacher schedule
                      return (
-                       <div key={day.dayOfWeek} className="flex items-center gap-3 px-2 py-1 hover:bg-slate-800/20 rounded-md group">
-                         <Checkbox checked={day.enabled} onCheckedChange={(v) => {
-                           const newSched = [...appointmentForm.schedule];
-                           newSched[idx].enabled = !!v;
-                           if (v && day.slots.length === 0) newSched[idx].slots = [{start:'09:00', end:'17:00'}];
-                           setAppointmentForm({...appointmentForm, schedule: newSched});
-                         }} />
-                         <span className="w-8 text-sm text-slate-300">{dayNames[day.dayOfWeek]}</span>
-                         {day.enabled ? (
-                           <div className="flex flex-col gap-2 flex-1">
+                       <div key={day.dayOfWeek} className="flex flex-col gap-2 p-3 bg-slate-800/40 rounded-lg border border-slate-700/50">
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Checkbox checked={day.enabled} onCheckedChange={(v) => {
+                                const newSched = [...appointmentForm.schedule];
+                                newSched[idx].enabled = !!v;
+                                if (v && day.slots.length === 0) newSched[idx].slots = [{start:'09:00', end:'17:00'}];
+                                setAppointmentForm({...appointmentForm, schedule: newSched});
+                              }} />
+                              <span className="w-8 text-sm font-semibold text-slate-200">{dayNames[idx]}</span>
+                            </div>
+                            {!day.enabled && <span className="text-xs text-slate-500 italic">Müsait değil</span>}
+                         </div>
+
+                         {day.enabled && (
+                           <div className="space-y-2 mt-1">
                              {day.slots.map((slot: any, sIdx: number) => (
-                               <div key={sIdx} className="flex items-center gap-2">
+                               <div key={sIdx} className="flex items-center gap-2 group">
                                  <Input 
                                    type="time"
-                                   className="w-24 h-8 bg-slate-800 border-slate-700 text-xs text-white" 
+                                   className="h-8 bg-slate-900 border-slate-700 text-xs text-white" 
                                    value={slot.start} 
                                    onChange={(e) => {
                                      const newSched = [...appointmentForm.schedule];
@@ -791,7 +825,7 @@ export default function DashboardPage() {
                                  <span className="text-slate-500">-</span>
                                  <Input 
                                    type="time"
-                                   className="w-24 h-8 bg-slate-800 border-slate-700 text-xs text-white" 
+                                   className="h-8 bg-slate-900 border-slate-700 text-xs text-white" 
                                    value={slot.end} 
                                    onChange={(e) => {
                                      const newSched = [...appointmentForm.schedule];
@@ -804,22 +838,71 @@ export default function DashboardPage() {
                                    newSched[idx].slots.splice(sIdx, 1);
                                    if (newSched[idx].slots.length === 0) newSched[idx].enabled = false;
                                    setAppointmentForm({...appointmentForm, schedule: newSched});
-                                 }} className="p-1 text-slate-500 hover:text-red-400"><MinusCircle className="w-4 h-4" /></button>
+                                 }} className="p-1 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><MinusCircle className="w-4 h-4" /></button>
                                </div>
                              ))}
                              <button onClick={() => {
                                const newSched = [...appointmentForm.schedule];
                                newSched[idx].slots.push({start: '09:00', end: '17:00'});
                                setAppointmentForm({...appointmentForm, schedule: newSched});
-                             }} className="text-[10px] text-blue-400 font-bold hover:underline w-fit">+ Slot ekle</button>
+                             }} className="flex items-center gap-1 text-[10px] text-blue-400 font-bold hover:underline"><Plus className="w-3 h-3" /> Ekle</button>
                            </div>
-                         ) : (
-                           <span className="text-slate-500 text-sm italic">Müsait değil</span>
                          )}
                        </div>
                      );
                    })}
                 </div>
+
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="window" className="border-slate-700">
+                    <AccordionTrigger className="text-sm font-semibold text-slate-300 hover:no-underline">Planlama zaman aralığı</AccordionTrigger>
+                    <AccordionContent className="space-y-4 pt-2">
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-slate-500">Maks. Gün Öncesi</Label>
+                            <Input 
+                              type="number" 
+                              value={appointmentForm.planningWindow.startInDays} 
+                              onChange={(e) => setAppointmentForm({...appointmentForm, planningWindow: {...appointmentForm.planningWindow, startInDays: parseInt(e.target.value)}})}
+                              className="bg-slate-800 border-slate-700 h-9" 
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-slate-500">Min. Saat Önce</Label>
+                            <Input 
+                              type="number" 
+                              value={appointmentForm.planningWindow.minLeadTimeInHours} 
+                              onChange={(e) => setAppointmentForm({...appointmentForm, planningWindow: {...appointmentForm.planningWindow, minLeadTimeInHours: parseInt(e.target.value)}})}
+                              className="bg-slate-800 border-slate-700 h-9" 
+                            />
+                          </div>
+                       </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                  <AccordionItem value="settings" className="border-slate-700">
+                    <AccordionTrigger className="text-sm font-semibold text-slate-300 hover:no-underline">Alınmış randevu ayarları</AccordionTrigger>
+                    <AccordionContent className="space-y-4 pt-2">
+                       <div className="flex items-center justify-between gap-4">
+                          <Label className="text-xs text-slate-400">Öncesinde tampon (dk)</Label>
+                          <Input 
+                            type="number" 
+                            value={appointmentForm.bookedSettings.bufferBefore} 
+                            onChange={(e) => setAppointmentForm({...appointmentForm, bookedSettings: {...appointmentForm.bookedSettings, bufferBefore: parseInt(e.target.value)}})}
+                            className="bg-slate-800 border-slate-700 h-9 w-20" 
+                          />
+                       </div>
+                       <div className="flex items-center justify-between gap-4">
+                          <Label className="text-xs text-slate-400">Sonrasında tampon (dk)</Label>
+                          <Input 
+                            type="number" 
+                            value={appointmentForm.bookedSettings.bufferAfter} 
+                            onChange={(e) => setAppointmentForm({...appointmentForm, bookedSettings: {...appointmentForm.bookedSettings, bufferAfter: parseInt(e.target.value)}})}
+                            className="bg-slate-800 border-slate-700 h-9 w-20" 
+                          />
+                       </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
             ) : (
               <div className="space-y-5">
@@ -844,7 +927,11 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <div className="p-4 bg-slate-800/10 border-t border-slate-700/50 flex items-center justify-end gap-3">
+
+          <div className={cn(
+            "p-4 border-t border-slate-700/50 flex items-center justify-end gap-3",
+            activeEventTab === 'Randevu programı' ? "fixed bottom-0 left-0 w-full bg-[#202124] z-10" : "bg-slate-800/10"
+          )}>
             {selectedEvent && (
               <button onClick={async () => {
                 await deleteDoc(doc(db, 'users', user?.uid!, 'events', selectedEvent.id));
@@ -852,12 +939,14 @@ export default function DashboardPage() {
                 toast({title:'Silindi'});
               }} className="text-sm font-medium text-red-400 hover:bg-red-900/20 px-4 py-2 rounded-md">Sil</button>
             )}
-            <button onClick={handleSaveEvent} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-full text-sm font-medium transition-all shadow-lg">Kaydet</button>
+            <button onClick={handleSaveEvent} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2 rounded-full text-sm font-medium transition-all shadow-lg">
+              {activeEventTab === 'Randevu programı' ? 'Sonraki' : 'Kaydet'}
+            </button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* --- SETTINGS MODAL --- */}
+      {/* --- SETTINGS MODAL (V9 EXACT CLONE) --- */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-full h-full p-0 m-0 border-none rounded-none bg-[#202124] text-white flex flex-col overflow-hidden">
           <VisuallyHidden><DialogTitle>Ayarlar</DialogTitle></VisuallyHidden>
@@ -867,78 +956,69 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-1 overflow-hidden">
             <aside className="w-[300px] border-r border-slate-700 py-6 overflow-y-auto bg-[#292a2d]">
+              <div className="px-6 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-widest">Takvim Ayarları</div>
               <div className="space-y-1">
-                <button onClick={() => setIsGenelOpen(!isGenelOpen)} className="w-full flex items-center justify-between px-6 py-3 bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">
-                  <span className="flex items-center gap-3">Genel</span>
-                  {isGenelOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <button 
+                  onClick={() => setSettingsSection('genel')} 
+                  className={cn(
+                    "w-full text-left px-6 py-3 font-medium transition-all border-l-4",
+                    settingsSection === 'genel' ? "bg-blue-900/30 text-blue-400 border-blue-500" : "text-slate-300 border-transparent hover:bg-slate-800"
+                  )}
+                >
+                  Genel Bilgiler
                 </button>
-                {isGenelOpen && (
-                  <div className="bg-slate-800/20">
-                    {[
-                      { id: 'dil-bolge', label: 'Dil ve bölge' },
-                      { id: 'saat-dilimi', label: 'Saat dilimi' },
-                      { id: 'dunya-saati', label: 'Dünya saati' },
-                      { id: 'etkinlik-ayarlari', label: 'Etkinlik ayarları' },
-                      { id: 'bildirim-ayarlari', label: 'Bildirim ayarları' },
-                      { id: 'gorunum', label: 'Görünüm seçenekleri' },
-                      { id: 'workspace', label: 'Google Workspace akıllı özellikleri' },
-                      { id: 'kisayollar', label: 'Klavye kısayolları' }
-                    ].map((item) => (
-                      <button 
-                        key={item.id} 
-                        onClick={() => setSettingsSection(item.id)} 
-                        className={cn(
-                          "w-full text-left pl-12 pr-6 py-2.5 text-[13px] hover:bg-slate-800 transition-colors border-l-4 relative group",
-                          settingsSection === item.id ? "text-blue-400 border-blue-500 bg-blue-500/5" : "text-slate-400 border-transparent"
-                        )}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <button onClick={() => setSettingsSection('takvim-ekle')} className={cn("w-full text-left px-6 py-3 hover:bg-slate-800 transition-colors", settingsSection === 'takvim-ekle' ? "bg-slate-800 text-blue-400" : "text-slate-300")}>Takvim Ekle</button>
+                <button 
+                  onClick={() => setSettingsSection('gorunum')} 
+                  className={cn(
+                    "w-full text-left px-6 py-3 font-medium transition-all border-l-4",
+                    settingsSection === 'gorunum' ? "bg-blue-900/30 text-blue-400 border-blue-500" : "text-slate-300 border-transparent hover:bg-slate-800"
+                  )}
+                >
+                  Görünüm Seçenekleri
+                </button>
+                <button 
+                  onClick={() => setSettingsSection('takvim-ekle')} 
+                  className={cn(
+                    "w-full text-left px-6 py-3 font-medium transition-all border-l-4",
+                    settingsSection === 'takvim-ekle' ? "bg-blue-900/30 text-blue-400 border-blue-500" : "text-slate-300 border-transparent hover:bg-slate-800"
+                  )}
+                >
+                  Takvim Ekle
+                </button>
               </div>
             </aside>
+            
             <main className="flex-1 p-12 overflow-y-auto bg-[#202124]">
-              <div className="max-w-2xl mx-auto space-y-12">
-                {settingsSection === 'dil-bolge' && (
+              <div className="max-w-2xl mx-auto space-y-12 animate-in fade-in duration-300">
+                {settingsSection === 'genel' && (
                   <section className="space-y-8">
-                    <h3 className="text-2xl font-normal">Dil ve bölge</h3>
-                    <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
-                      <Label className="text-slate-400">Dil</Label>
-                      <Select defaultValue="tr">
-                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
-                      <Label className="text-slate-400">Ülke</Label>
-                      <Select defaultValue="TR">
-                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent>{COUNTRY_LIST.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                  </section>
-                )}
-                {settingsSection === 'bildirim-ayarlari' && (
-                  <section className="space-y-8">
-                    <h3 className="text-2xl font-normal">Bildirim ayarları</h3>
-                    <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
-                      <div>
-                        <div className="font-medium">Masaüstü Bildirimleri</div>
-                        <div className="text-sm text-slate-500">Tarayıcı üzerinden önemli uyarılar alın.</div>
+                    <h3 className="text-2xl font-normal text-white">Genel Bilgiler</h3>
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                        <Label className="text-slate-400">Dil</Label>
+                        <Select defaultValue="tr">
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
+                        </Select>
                       </div>
-                      <Switch checked={notificationsEnabled} onCheckedChange={(v) => {
-                        if (v) Notification.requestPermission();
-                        setNotificationsEnabled(v);
-                      }} />
+                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                        <Label className="text-slate-400">Ülke</Label>
+                        <Select defaultValue="TR">
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>{COUNTRY_LIST.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                        <Label className="text-slate-400">Saat Dilimi</Label>
+                        <div className="text-sm text-slate-300">İstanbul (GMT+3)</div>
+                      </div>
                     </div>
                   </section>
                 )}
+                
                 {settingsSection === 'gorunum' && (
                   <section className="space-y-8">
-                    <h3 className="text-2xl font-normal">Görünüm seçenekleri</h3>
+                    <h3 className="text-2xl font-normal text-white">Görünüm Seçenekleri</h3>
                     <div className="space-y-6">
                       <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
                         <div>
@@ -947,24 +1027,32 @@ export default function DashboardPage() {
                         </div>
                         <Switch checked={!hideWeekends} onCheckedChange={(v) => setHideWeekends(!v)} />
                       </div>
+                      <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                        <div>
+                          <div className="font-medium">Bildirimler</div>
+                          <div className="text-sm text-slate-500">Masaüstü bildirimlerini etkinleştir.</div>
+                        </div>
+                        <Switch checked={notificationsEnabled} onCheckedChange={(v) => setNotificationsEnabled(v)} />
+                      </div>
                     </div>
                   </section>
                 )}
+
                 {settingsSection === 'takvim-ekle' && (
                   <section className="space-y-8">
-                    <h3 className="text-2xl font-normal">Takvim Ekle</h3>
+                    <h3 className="text-2xl font-normal text-white">Takvim Ekle</h3>
                     <div className="bg-slate-800/30 p-8 rounded-xl border border-dashed border-slate-600 text-center space-y-4">
-                      <p className="text-slate-400">İlgi alanlarınıza göre yeni bayram takvimleri ekleyin.</p>
-                      <Button onClick={() => setIsCountryModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">Ülke Bayramı Ekle</Button>
+                      <p className="text-slate-400">Yeni bayram ve resmi tatil takvimleri keşfedin.</p>
+                      <Button onClick={() => setIsCountryModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">Takvim Ara</Button>
                     </div>
                     {selectedCountries.length > 0 && (
-                      <div className="space-y-2">
-                        <Label className="text-slate-400 uppercase text-xs font-bold">Ekli Takvimler</Label>
+                      <div className="space-y-3">
+                        <Label className="text-slate-400 uppercase text-[10px] font-bold tracking-widest px-2">Aktif Takvimlerin</Label>
                         <div className="space-y-1">
                           {selectedCountries.map(code => (
-                            <div key={code} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-                              <span>{COUNTRY_LIST.find(c => c.code === code)?.name || code} Bayramları</span>
-                              <button onClick={() => setSelectedCountries(prev => prev.filter(c => c !== code))} className="text-red-400 hover:underline text-xs">Kaldır</button>
+                            <div key={code} className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 group">
+                              <span className="text-sm text-slate-300 font-medium">{COUNTRY_LIST.find(c => c.code === code)?.name || code} Bayramları</span>
+                              <button onClick={() => setSelectedCountries(prev => prev.filter(c => c !== code))} className="text-red-400 hover:text-red-300 text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">KALDIR</button>
                             </div>
                           ))}
                         </div>
@@ -988,12 +1076,12 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col items-center gap-6 py-10 px-6">
             <div className="p-4 bg-white rounded-2xl shadow-2xl">
-              <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={220} level="H" includeMargin={true} />
+              <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}/book/${user?.uid}/default`} size={220} level="H" includeMargin={true} />
             </div>
             <div className="text-center space-y-3 w-full">
               <p className="text-sm text-slate-400">Öğrencileriniz için randevu linki.</p>
               <div className="flex items-center gap-2 bg-slate-800 p-2 rounded-lg border border-slate-700 w-full">
-                <input readOnly value={`${window.location.origin}/book/${user?.uid}/default`} className="bg-transparent text-xs text-blue-400 flex-1 outline-none truncate" />
+                <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/book/${user?.uid}/default`} className="bg-transparent text-xs text-blue-400 flex-1 outline-none truncate" />
                 <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/book/${user?.uid}/default`); toast({title:'Kopyalandı'}); }} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><LinkIcon className="w-4 h-4" /></button>
               </div>
             </div>
