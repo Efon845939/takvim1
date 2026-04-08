@@ -15,6 +15,7 @@ import {
   orderBy,
   where
 } from 'firebase/firestore';
+import { useTheme } from '@/components/theme-provider';
 import { 
   format, 
   startOfWeek, 
@@ -145,8 +146,20 @@ export default function DashboardPage() {
   const gridScrollRef = useRef<HTMLDivElement>(null);
   
   // Settings UI States
+  const [language, setLanguage] = useState<'tr' | 'en'>('tr');
+  const [country, setCountry] = useState('TR');
+  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [showWorldClock, setShowWorldClock] = useState(false);
+  const [worldClockTimezone, setWorldClockTimezone] = useState('Europe/London');
+  const [defaultEventDuration, setDefaultEventDuration] = useState('30');
+  const [defaultEventReminder, setDefaultEventReminder] = useState('30');
+  const [defaultEventVisibility, setDefaultEventVisibility] = useState<'default' | 'public' | 'private'>('default');
+  const [keyboardShortcutsEnabled, setKeyboardShortcutsEnabled] = useState(true);
+  const [themePreference, setThemePreference] = useState<'auto' | 'light' | 'dark'>('auto');
+  const [workspaceEnabled, setWorkspaceEnabled] = useState(false);
   const [hideWeekends, setHideWeekends] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [defaultView, setDefaultView] = useState<'gün' | 'hafta' | 'ay' | 'plan'>('hafta');
   const [settingsSection, setSettingsSection] = useState('dil-bolge');
   const [isGenelOpen, setIsGenelOpen] = useState(true);
 
@@ -245,6 +258,7 @@ export default function DashboardPage() {
   }, [db, user?.uid]);
   
   const { data: userData } = useDoc(userDocRef);
+  const { setTheme } = useTheme();
 
   const teacherEmails = ['proturkgamerefe@gmail.com', 'sintiya.ugur@bahcesehir.k12.tr'];
   const teacherContacts: Record<string, { phone: string }> = {
@@ -253,6 +267,81 @@ export default function DashboardPage() {
   const userEmail = user?.email?.toLowerCase();
   const userContact = userEmail ? teacherContacts[userEmail] : undefined;
   const isTeacher = userData?.role === 'teacher' || (userEmail ? teacherEmails.includes(userEmail) : false);
+
+  useEffect(() => {
+    const handleShortcutKey = (event: KeyboardEvent) => {
+      if (!keyboardShortcutsEnabled) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        setIsSettingsOpen(true);
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleShortcutKey);
+    return () => window.removeEventListener('keydown', handleShortcutKey);
+  }, [keyboardShortcutsEnabled]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
+  useEffect(() => {
+    setTheme(themePreference);
+  }, [themePreference, setTheme]);
+
+  useEffect(() => {
+    if (!userData) return;
+    setLanguage(userData.language || 'tr');
+    setCountry(userData.country || 'TR');
+    setTimezone(userData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+    setShowWorldClock(userData.showWorldClock ?? false);
+    setWorldClockTimezone(userData.worldClockTimezone || 'Europe/London');
+    setDefaultEventDuration(userData.defaultEventDuration || '30');
+    setDefaultEventReminder(userData.defaultEventReminder || '30');
+    setDefaultEventVisibility(userData.defaultEventVisibility || 'default');
+    setKeyboardShortcutsEnabled(userData.keyboardShortcutsEnabled ?? true);
+    setThemePreference(userData.theme || 'auto');
+    setWorkspaceEnabled(userData.workspaceEnabled ?? false);
+    setHideWeekends(userData.hideWeekends ?? false);
+    setNotificationsEnabled(userData.notificationsEnabled ?? false);
+    setDefaultView(userData.defaultView || 'hafta');
+    if (userData.defaultView) {
+      setView(userData.defaultView as 'gün' | 'hafta' | 'ay' | 'plan');
+    }
+    setSelectedCountries(userData.selectedCountries || ['TR']);
+  }, [userData]);
+
+  const handleSaveSettings = async () => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        language,
+        country,
+        timezone,
+        showWorldClock,
+        worldClockTimezone,
+        defaultEventDuration,
+        defaultEventReminder,
+        defaultEventVisibility,
+        keyboardShortcutsEnabled,
+        theme: themePreference,
+        workspaceEnabled,
+        hideWeekends,
+        notificationsEnabled,
+        defaultView,
+        selectedCountries,
+        updatedAt: serverTimestamp(),
+      });
+      setTheme(themePreference);
+      toast({ title: 'Ayarlar güncellendi', description: 'Değişiklikler kaydedildi.' });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Hata', description: 'Ayarlar kaydedilemedi.' });
+    }
+  };
 
   const combinedEvents = React.useMemo(() => {
     const userEvents = eventsData || [];
@@ -913,16 +1002,99 @@ export default function DashboardPage() {
                     <h3 className="text-2xl font-normal">Dil ve bölge</h3>
                     <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
                       <Label className="text-slate-400">Dil</Label>
-                      <Select defaultValue="tr">
+                      <Select value={language} onValueChange={setLanguage}>
                         <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
+                        <SelectContent>
+                          <SelectItem value="tr">Türkçe</SelectItem>
+                          <SelectItem value="en">English</SelectItem>
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
                       <Label className="text-slate-400">Ülke</Label>
-                      <Select defaultValue="TR">
+                      <Select value={country} onValueChange={setCountry}>
                         <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
                         <SelectContent>{COUNTRY_LIST.map(c => <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </section>
+                )}
+                {settingsSection === 'saat-dilimi' && (
+                  <section className="space-y-8">
+                    <h3 className="text-2xl font-normal">Saat dilimi</h3>
+                    <div className="grid grid-cols-2 gap-8 items-center">
+                      <Label className="text-slate-400">Varsayılan saat dilimi</Label>
+                      <Select value={timezone} onValueChange={setTimezone}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Europe/Istanbul">İstanbul (GMT+3)</SelectItem>
+                          <SelectItem value="Europe/London">Londra (GMT+0)</SelectItem>
+                          <SelectItem value="America/New_York">New York (GMT-5)</SelectItem>
+                          <SelectItem value="Asia/Tokyo">Tokyo (GMT+9)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </section>
+                )}
+                {settingsSection === 'dunya-saati' && (
+                  <section className="space-y-8">
+                    <h3 className="text-2xl font-normal">Dünya saati</h3>
+                    <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                      <Label className="text-slate-400">Göster</Label>
+                      <Switch checked={showWorldClock} onCheckedChange={setShowWorldClock} />
+                    </div>
+                    {showWorldClock && (
+                      <div className="grid grid-cols-2 gap-8 items-center">
+                        <Label className="text-slate-400">Dünya saati dilimi</Label>
+                        <Select value={worldClockTimezone} onValueChange={setWorldClockTimezone}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Europe/London">Londra</SelectItem>
+                            <SelectItem value="America/New_York">New York</SelectItem>
+                            <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
+                            <SelectItem value="Europe/Istanbul">İstanbul</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </section>
+                )}
+                {settingsSection === 'etkinlik-ayarlari' && (
+                  <section className="space-y-8">
+                    <h3 className="text-2xl font-normal">Etkinlik ayarları</h3>
+                    <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                      <Label className="text-slate-400">Varsayılan etkinlik süresi</Label>
+                      <Select value={defaultEventDuration} onValueChange={setDefaultEventDuration}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="15">15 dakika</SelectItem>
+                          <SelectItem value="30">30 dakika</SelectItem>
+                          <SelectItem value="45">45 dakika</SelectItem>
+                          <SelectItem value="60">60 dakika</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                      <Label className="text-slate-400">Varsayılan hatırlatma</Label>
+                      <Select value={defaultEventReminder} onValueChange={setDefaultEventReminder}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0">Yok</SelectItem>
+                          <SelectItem value="15">15 dakika önce</SelectItem>
+                          <SelectItem value="30">30 dakika önce</SelectItem>
+                          <SelectItem value="60">1 saat önce</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-8 items-center">
+                      <Label className="text-slate-400">Varsayılan görünürlük</Label>
+                      <Select value={defaultEventVisibility} onValueChange={setDefaultEventVisibility}>
+                        <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">Varsayılan</SelectItem>
+                          <SelectItem value="public">Herkese açık</SelectItem>
+                          <SelectItem value="private">Özel</SelectItem>
+                        </SelectContent>
                       </Select>
                     </div>
                   </section>
@@ -946,12 +1118,66 @@ export default function DashboardPage() {
                   <section className="space-y-8">
                     <h3 className="text-2xl font-normal">Görünüm seçenekleri</h3>
                     <div className="space-y-6">
-                      <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
-                        <div>
-                          <div className="font-medium">Hafta sonlarını göster</div>
-                          <div className="text-sm text-slate-500">Takvimde Cumartesi ve Pazar'ı göster.</div>
-                        </div>
+                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                        <Label className="text-slate-400">Tema</Label>
+                        <Select value={themePreference} onValueChange={setThemePreference}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Otomatik</SelectItem>
+                            <SelectItem value="light">Açık</SelectItem>
+                            <SelectItem value="dark">Koyu</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-8 items-center border-b border-slate-800 pb-6">
+                        <Label className="text-slate-400">Hafta sonlarını göster</Label>
                         <Switch checked={!hideWeekends} onCheckedChange={(v) => setHideWeekends(!v)} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-8 items-center">
+                        <Label className="text-slate-400">Varsayılan takvim görünümü</Label>
+                        <Select value={defaultView} onValueChange={(value) => { setDefaultView(value as 'gün'|'hafta'|'ay'|'plan'); setView(value as any); }}>
+                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="gün">Gün</SelectItem>
+                            <SelectItem value="hafta">Hafta</SelectItem>
+                            <SelectItem value="ay">Ay</SelectItem>
+                            <SelectItem value="plan">Plan</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </section>
+                )}
+                {settingsSection === 'workspace' && (
+                  <section className="space-y-8">
+                    <h3 className="text-2xl font-normal">Google Workspace akıllı özellikleri</h3>
+                    <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                      <div>
+                        <div className="font-medium">Workspace entegrasyonu</div>
+                        <div className="text-sm text-slate-500">Google Workspace özelliklerini kullanarak takviminizi daha akıllı hale getirin.</div>
+                      </div>
+                      <Switch checked={workspaceEnabled} onCheckedChange={setWorkspaceEnabled} />
+                    </div>
+                  </section>
+                )}
+                {settingsSection === 'kisayollar' && (
+                  <section className="space-y-8">
+                    <h3 className="text-2xl font-normal">Klavye kısayolları</h3>
+                    <div className="flex items-center justify-between p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                      <div>
+                        <div className="font-medium">Kısayolları etkinleştir</div>
+                        <div className="text-sm text-slate-500">Uygulamada klavye kısayollarını kullanmak için açın.</div>
+                      </div>
+                      <Switch checked={keyboardShortcutsEnabled} onCheckedChange={setKeyboardShortcutsEnabled} />
+                    </div>
+                    <div className="grid gap-3">
+                      <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+                        <div className="text-sm text-slate-300 font-medium">Kısayol listesi</div>
+                        <ul className="mt-3 space-y-2 text-sm text-slate-400">
+                          <li><span className="font-semibold">Ctrl + B</span> - Kenar çubuğunu aç/kapat</li>
+                          <li><span className="font-semibold">Ctrl + S</span> - Ayarlar</li>
+                          <li><span className="font-semibold">Ctrl + K</span> - Ara</li>
+                        </ul>
                       </div>
                     </div>
                   </section>
@@ -980,6 +1206,9 @@ export default function DashboardPage() {
                 )}
               </div>
             </main>
+          </div>
+          <div className="p-6 border-t border-slate-700 bg-[#202124] flex justify-end">
+            <Button onClick={handleSaveSettings} className="px-6">Ayarları Kaydet</Button>
           </div>
         </DialogContent>
       </Dialog>
