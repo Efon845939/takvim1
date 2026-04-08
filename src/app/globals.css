@@ -1,61 +1,115 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-  }
+     :root {
+        --background: 0 0% 100%;
+        --foreground: 224 71.4% 4.1%;
+        --card: 0 0% 100%;
+        --card-foreground: 224 71.4% 4.1%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 224 71.4% 4.1%;
+        --primary: 221.2 83.2% 53.3%;
+        --primary-foreground: 210 20% 98%;
+        --secondary: 210 40% 96.1%;
+        --secondary-foreground: 222.2 47.4% 11.2%;
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+        --accent: 210 40% 96.1%;
+        --accent-foreground: 222.2 47.4% 11.2%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 210 20% 98%;
+        --border: 214.3 31.8% 91.4%;
+        --input: 214.3 31.8% 91.4%;
+        --ring: 221.2 83.2% 53.3%;
+        --radius: 0.5rem;
+        --app-background: 255 255 255;
+        --app-foreground: 17 24 39;
+        --surface-background: 248 250 252;
+        --surface-foreground: 17 24 39;
+        --panel-background: 255 255 255;
+        --panel-foreground: 17 24 39;
+        --app-border: 226 232 240;
+    }
+    html.dark {
+        --app-background: 15 23 42;
+        --app-foreground: 226 232 240;
+        --surface-background: 30 41 59;
+        --surface-foreground: 226 232 240;
+        --panel-background: 15 23 42;
+        --panel-foreground: 226 232 240;
+        --app-border: 71 85 105;
+    }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-white text-[#111827] font-sans antialiased;
-  }
+    * {
+        @apply border-border;
+    }
+    body {
+        background-color: rgb(var(--app-background));
+        color: rgb(var(--app-foreground));
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
 }
+
+html:not(.dark) [class*="bg-[#202124]"] {
+    background-color: rgb(248 250 252) !important;
+}
+
+html:not(.dark) [class*="bg-slate-800"] {
+    background-color: rgb(248 250 252) !important;
+}
+
+html:not(.dark) [class*="bg-slate-900"] {
+    background-color: rgb(241 245 249) !important;
+}
+
+html:not(.dark) [class*="border-slate-700"] {
+    border-color: rgb(226 232 240) !important;
+}
+
+html:not(.dark) [class*="text-white"] {
+    color: rgb(15 23 42) !important;
+}
+
+html:not(.dark) [class*="text-slate-200"] {
+    color: rgb(71 85 105) !important;
+}
+
+html:not(.dark) [class*="text-slate-400"] {
+    color: rgb(71 85 105) !important;
+}
+
 
 /* Custom Scrollbar for better UI feel */
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-transparent;
+    @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-200 rounded-full hover:bg-slate-300;
+    @apply bg-slate-200 rounded-full hover: bg-slate-300;
 }
+
 
 /* Hide arrow icons in the mini calendar navigation since we use Lucide */
-.rdp-nav_button_previous, .rdp-nav_button_next {
-  @apply hidden !important;
+
+.rdp-nav_button_previous,
+.rdp-nav_button_next {
+    @apply hidden !important;
 }
 
+
 /* Precision Grid Fixes */
+
 .grid-cols-7 {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
 }

@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, Clock, Globe, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTheme } from '@/components/theme-provider';
 
 const DAYS = [
   { id: 1, name: 'Pazartesi' },
@@ -39,14 +40,17 @@ export default function SettingsPage() {
 
   const userDocRef = React.useMemo(() => (user ? doc(db, 'users', user.uid) : null), [db, user]);
   const { data: userData, isLoading } = useDoc(userDocRef as any);
+  const { setTheme } = useTheme();
 
   const [workingHours, setWorkingHours] = useState<any[]>([]);
   const [timezone, setTimezone] = useState('');
+  const [themePreference, setThemePreference] = useState<'auto' | 'light' | 'dark'>('auto');
 
   useEffect(() => {
     if (userData) {
       setWorkingHours(userData.workingHours || []);
       setTimezone(userData.timezone || '');
+      setThemePreference(userData.theme || 'auto');
     }
   }, [userData]);
 
@@ -68,8 +72,10 @@ export default function SettingsPage() {
       await updateDoc(doc(db, 'users', user.uid), {
         workingHours,
         timezone,
+        theme: themePreference,
         updatedAt: serverTimestamp(),
       });
+      setTheme(themePreference);
       toast({ title: 'Başarılı', description: 'Ayarlar güncellendi.' });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Hata', description: 'Ayarlar kaydedilemedi.' });
@@ -115,6 +121,34 @@ export default function SettingsPage() {
                     <SelectItem value="America/New_York">New York (GMT-5)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-primary" />
+                Görünüm
+              </CardTitle>
+              <CardDescription>Tema tercihlerinizi ayarlayın.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="theme">Tema</Label>
+                <Select value={themePreference} onValueChange={setThemePreference}>
+                  <SelectTrigger id="theme">
+                    <SelectValue placeholder="Tema seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Otomatik</SelectItem>
+                    <SelectItem value="light">Açık</SelectItem>
+                    <SelectItem value="dark">Koyu</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-slate-500">
+                  Otomatik seçildiğinde tarayıcı ayarlarınıza göre açık veya koyu moda geçiş yapılır.
+                </p>
               </div>
             </CardContent>
           </Card>
