@@ -30,10 +30,12 @@ function applyThemeClass(theme: ThemeOption) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
   const [theme, setThemeState] = useState<ThemeOption>('auto');
   const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
+    setMounted(true);
     const savedTheme = window.localStorage.getItem(STORAGE_KEY) as ThemeOption | null;
     const initialTheme = savedTheme ?? 'auto';
     setThemeState(initialTheme);
@@ -57,15 +59,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!mounted) return;
     applyThemeClass(theme);
     setEffectiveTheme(theme === 'auto' ? getSystemTheme() : theme);
     window.localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+  }, [theme, mounted]);
 
   const contextValue = useMemo(
     () => ({ theme, effectiveTheme, setTheme: setThemeState }),
     [theme, effectiveTheme]
   );
+
+  if (!mounted) {
+    return <div style={{ visibility: 'hidden' }}>{children}</div>;
+  }
 
   return <ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>;
 }

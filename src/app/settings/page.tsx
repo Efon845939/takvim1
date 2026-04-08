@@ -48,8 +48,25 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (userData) {
-      setWorkingHours(userData.workingHours || []);
-      setTimezone(userData.timezone || '');
+      const savedHours = Array.isArray(userData.workingHours) ? userData.workingHours : [];
+      const safeWorkingHours = DAYS.map(day => {
+        const existing = savedHours.find((item: any) => item.dayOfWeek === day.id);
+        if (existing) {
+          const safeSlots = Array.isArray(existing.slots) && existing.slots.length > 0
+            ? existing.slots
+            : [{ start: '09:00', end: '17:00' }];
+          return { ...existing, slots: safeSlots };
+        }
+
+        return {
+          dayOfWeek: day.id,
+          enabled: false,
+          slots: [{ start: '09:00', end: '17:00' }],
+        };
+      });
+
+      setWorkingHours(safeWorkingHours);
+      setTimezone(userData.timezone || 'Europe/Istanbul');
       setThemePreference(userData.theme || 'auto');
     }
   }, [userData]);
@@ -58,7 +75,10 @@ export default function SettingsPage() {
     setWorkingHours(prev => prev.map(day => {
       if (day.dayOfWeek === dayOfWeek) {
         if (field === 'slots') {
-          return { ...day, slots: [{ ...day.slots[0], ...value }] };
+          const currentSlots = Array.isArray(day.slots) && day.slots.length > 0
+            ? day.slots
+            : [{ start: '09:00', end: '17:00' }];
+          return { ...day, slots: [{ ...currentSlots[0], ...value }] };
         }
         return { ...day, [field]: value };
       }
