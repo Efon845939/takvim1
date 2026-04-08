@@ -247,7 +247,11 @@ export default function DashboardPage() {
   const { data: userData } = useDoc(userDocRef);
 
   const teacherEmails = ['proturkgamerefe@gmail.com', 'sintiya.ugur@bahcesehir.k12.tr'];
+  const teacherContacts: Record<string, { phone: string }> = {
+    'sintiya.ugur@bahcesehir.k12.tr': { phone: '05301515822' },
+  };
   const userEmail = user?.email?.toLowerCase();
+  const userContact = userEmail ? teacherContacts[userEmail] : undefined;
   const isTeacher = userData?.role === 'teacher' || (userEmail ? teacherEmails.includes(userEmail) : false);
 
   const combinedEvents = React.useMemo(() => {
@@ -998,6 +1002,12 @@ export default function DashboardPage() {
                 <input readOnly value={`${window.location.origin}/book/${user?.uid}/default`} className="bg-transparent text-xs text-blue-400 flex-1 outline-none truncate" />
                 <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/book/${user?.uid}/default`); toast({title:'Kopyalandı'}); }} className="p-1.5 hover:bg-slate-700 rounded transition-colors"><LinkIcon className="w-4 h-4" /></button>
               </div>
+              {userContact?.phone && (
+                <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 text-left">
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-slate-500">Randevu için telefon</p>
+                  <p className="mt-1 text-sm font-medium text-white">{userContact.phone}</p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
