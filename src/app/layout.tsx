@@ -10,6 +10,11 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Randevu Hoca | Akıllı Takvim ve Planlama',
   description: 'SaaS tabanlı akıllı takvim ve randevu yönetim sistemi.',
+  icons: {
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
+  },
 };
 
 export default function RootLayout({
