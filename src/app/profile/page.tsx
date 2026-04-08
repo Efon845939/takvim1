@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -5,7 +6,7 @@ import { useUser } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, User, Mail, Shield, Hash } from 'lucide-react';
+import { ArrowLeft, Mail, Shield, Hash } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProfilePage() {

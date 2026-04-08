@@ -170,13 +170,13 @@ export default function DashboardPage() {
     title: '',
     duration: '30',
     schedule: [
-      { dayOfWeek: 1, enabled: false, slots: [] },
+      { dayOfWeek: 1, enabled: false, slots: [] as any[] },
       { dayOfWeek: 2, enabled: true, slots: [{ start: '08:45', end: '11:50' }] },
       { dayOfWeek: 3, enabled: true, slots: [{ start: '08:45', end: '09:25' }, { start: '10:25', end: '10:55' }, { start: '11:05', end: '11:35' }] },
       { dayOfWeek: 4, enabled: true, slots: [{ start: '12:00', end: '12:30' }] },
       { dayOfWeek: 5, enabled: true, slots: [{ start: '08:45', end: '11:50' }] },
-      { dayOfWeek: 6, enabled: false, slots: [] },
-      { dayOfWeek: 0, enabled: false, slots: [] },
+      { dayOfWeek: 6, enabled: false, slots: [] as any[] },
+      { dayOfWeek: 0, enabled: false, slots: [] as any[] },
     ]
   });
 
@@ -747,7 +747,7 @@ export default function DashboardPage() {
                   <div className="flex-1 space-y-4">
                     <Label className="text-slate-400 text-xs">Randevu süresi</Label>
                     <Select value={appointmentForm.duration} onValueChange={(v) => setAppointmentForm({...appointmentForm, duration: v})}>
-                      <SelectTrigger className="w-32 bg-slate-800 border-slate-700">
+                      <SelectTrigger className="w-32 bg-slate-800 border-slate-700 text-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -776,7 +776,7 @@ export default function DashboardPage() {
                          <span className="w-8 text-sm text-slate-300">{dayNames[day.dayOfWeek]}</span>
                          {day.enabled ? (
                            <div className="flex flex-col gap-2 flex-1">
-                             {day.slots.map((slot, sIdx) => (
+                             {day.slots.map((slot: any, sIdx: number) => (
                                <div key={sIdx} className="flex items-center gap-2">
                                  <Input 
                                    type="time"

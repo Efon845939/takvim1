@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -23,10 +24,6 @@ interface ReportCardProps {
   description?: string;
 }
 
-/**
- * A reusable dashboard card for displaying metrics with icons.
- * Fixed non-existent icon names (Fire -> Flame, Medical -> Stethoscope)
- */
 export function ReportCard({ title, value, icon, color, description }: ReportCardProps) {
   const icons = {
     alert: AlertTriangle,

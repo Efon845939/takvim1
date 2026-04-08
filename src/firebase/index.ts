@@ -4,23 +4,28 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { firebaseConfig } from '@/firebase/config';
+import { firebaseConfig as staticConfig } from '@/firebase/config';
 
 /**
  * Initializes Firebase services safely for both client and server (Prerendering).
- * Ensures only one instance exists.
+ * Ensures only one instance exists and uses environment variables with fallbacks.
  */
 export function initializeFirebase() {
   let app: FirebaseApp;
 
-  if (!getApps().length) {
-    // Robust check for Vercel build time where env might be partially available
-    if (!firebaseConfig.apiKey) {
-      console.warn("Firebase API Key is missing. Check your environment variables.");
-    }
-    app = initializeApp(firebaseConfig);
-  } else {
+  const resolvedConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || staticConfig.apiKey,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || staticConfig.authDomain,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || staticConfig.projectId,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || staticConfig.storageBucket,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || staticConfig.messagingSenderId,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || staticConfig.appId,
+  };
+
+  if (getApps().length > 0) {
     app = getApp();
+  } else {
+    app = initializeApp(resolvedConfig);
   }
 
   return {
