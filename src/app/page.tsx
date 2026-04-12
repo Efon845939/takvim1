@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -31,7 +30,9 @@ import {
   addDays as addDaysFn,
   subDays as subDaysFn,
   isSameMonth,
-  setSeconds
+  setSeconds,
+  getWeek,
+  isBefore
 } from 'date-fns';
 import { tr, enUS } from 'date-fns/locale';
 import { 
@@ -62,7 +63,11 @@ import {
   MinusCircle,
   CalendarCheck2,
   Settings2,
-  Palette
+  Palette,
+  Monitor,
+  Sun,
+  Moon,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -209,6 +214,7 @@ export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isClient, setIsClient] = useState(false);
   const gridScrollRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   
   // Event Form
   const [activeEventTab, setActiveTab] = useState('Etkinlik');
@@ -241,6 +247,7 @@ export default function DashboardPage() {
   const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
   const [aiInput, setAiInput] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [currentlyTyping, setCurrentlyTyping] = useState<string>("");
 
   // --- MEMOIZED QUERIES ---
   const eventsQuery = useMemoFirebase(() => {
@@ -263,6 +270,13 @@ export default function DashboardPage() {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // AUTO SCROLL CHAT
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [aiMessages, currentlyTyping]);
 
   // SYNC PERSISTED SETTINGS
   useEffect(() => {
@@ -321,7 +335,7 @@ export default function DashboardPage() {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     let days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     
-    // Uygulanan Ayar: Hafta sonlarını göster
+    // Görünüm Ayarı: Hafta sonlarını göster
     if (userData?.showWeekends === false) {
       days = days.filter(d => getDay(d) !== 0 && getDay(d) !== 6);
     }
@@ -407,13 +421,34 @@ export default function DashboardPage() {
     if (!aiInput.trim()) return;
     const msg = aiInput;
     setAiInput('');
-    setAiMessages(prev => [...prev, { role: 'user', text: msg }]);
+    const newHistory = [...aiMessages, { role: 'user' as const, text: msg }];
+    setAiMessages(newHistory);
     setIsAiLoading(true);
     try {
-      const response = await calendarHelper({ message: msg });
-      setAiMessages(prev => [...prev, { role: 'ai', text: response.reply }]);
+      // Hafıza: Tüm history'yi gönderiyoruz
+      const response = await calendarHelper({ 
+        message: msg, 
+        history: newHistory,
+        userContext: `Kullanıcı: ${user?.displayName}, Görünüm: ${view}, Tarih: ${format(currentDate, 'yyyy-MM-dd')}` 
+      });
+      
+      // Harf harf yazma efekti
+      const reply = response.reply;
+      let currentIdx = 0;
+      setCurrentlyTyping("");
+      
+      const interval = setInterval(() => {
+        setCurrentlyTyping(prev => prev + reply[currentIdx]);
+        currentIdx++;
+        if (currentIdx >= reply.length) {
+          clearInterval(interval);
+          setAiMessages(prev => [...prev, { role: 'ai', text: reply }]);
+          setCurrentlyTyping("");
+        }
+      }, 20);
+
     } catch (error) {
-      setAiMessages(prev => [...prev, { role: 'ai', text: 'Error' }]);
+      setAiMessages(prev => [...prev, { role: 'ai', text: 'Üzgünüm, şu an yardımcı olamıyorum.' }]);
     } finally {
       setIsAiLoading(false);
     }
@@ -539,16 +574,30 @@ export default function DashboardPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="px-1 mb-2">
-              <div className="flex items-center bg-accent/50 rounded-md px-3 py-1.5 border border-transparent focus-within:border-primary/50 transition-colors">
-                <Users className="w-4 h-4 text-muted-foreground mr-2 shrink-0" />
-                <input 
-                  type="text" 
-                  placeholder={t('search')}
-                  className="bg-transparent border-none outline-none text-xs w-full placeholder:text-muted-foreground"
-                />
+            {userData?.worldClockEnabled && (
+              <div className="px-1 border-b pb-4">
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2 mb-3">Dünya Saati</h3>
+                <div className="space-y-3 px-2">
+                   <div className="flex justify-between items-center">
+                     <span className="text-xs font-medium">İstanbul</span>
+                     <span className="text-xs font-mono">{format(new Date(), 'HH:mm')}</span>
+                   </div>
+                   {userData?.secondaryTzEnabled && (
+                     <div className="flex justify-between items-center text-muted-foreground">
+                       <span className="text-xs">{userData.secondaryTimezone?.split('/')[1] || 'New York'}</span>
+                       <span className="text-xs font-mono">
+                         {new Date().toLocaleTimeString('tr-TR', { 
+                           timeZone: userData.secondaryTimezone || 'America/New_York', 
+                           hour: '2-digit', 
+                           minute: '2-digit',
+                           hour12: false 
+                         })}
+                       </span>
+                     </div>
+                   )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="px-1">
               <div className="flex items-center justify-between mb-4 px-2">
@@ -600,21 +649,6 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </div>
-
-              <div>
-                <div className="flex items-center justify-between px-2 mb-2 group">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t('otherCalendars')}</h3>
-                  <button onClick={() => setIsCountryModalOpen(true)} className="p-1 hover:bg-accent rounded-full transition-opacity opacity-0 group-hover:opacity-100"><Plus className="w-4 h-4 text-muted-foreground" /></button>
-                </div>
-                <div className="space-y-1">
-                  {selectedCountries.map(code => (
-                    <label key={code} className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-accent rounded-md transition-colors">
-                      <Checkbox checked={filters.holiday} onCheckedChange={(checked) => setFilters({...filters, holiday: !!checked})} />
-                      <span className="text-[13px] font-medium">{COUNTRY_LIST.find(c => c.code === code)?.name || code} {t('holiday')}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
             </div>
           </aside>
         )}
@@ -623,13 +657,22 @@ export default function DashboardPage() {
           {isClient && (view === 'hafta' || view === 'gün') && (
             <div className="flex pr-[15px] shrink-0 border-b bg-background/50 sticky top-0 z-20">
               <div className="w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-2">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">GMT{format(currentDate, 'X')}</span>
+                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
+                  {isClient ? `GMT${format(currentDate, 'X')}` : 'GMT'}
+                </span>
               </div>
               <div className={cn("flex-1 grid", view === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
                 {weekDays.map((day, i) => (
                     <div key={i} className="flex flex-col items-center justify-center py-4 gap-1">
-                      <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
-                      <div className={cn("w-[46px] h-[46px] flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}><span className="text-[24px] font-medium">{format(day, 'd')}</span></div>
+                      <div className="flex flex-col items-center">
+                        <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
+                        <div className={cn("w-[46px] h-[46px] flex items-center justify-center rounded-full transition-colors mt-1", isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}>
+                          <span className="text-[24px] font-medium">{format(day, 'd')}</span>
+                        </div>
+                      </div>
+                      {userData?.showWeekNumbers && i === 0 && (
+                        <span className="text-[9px] text-muted-foreground absolute top-2 left-2">H{getWeek(day)}</span>
+                      )}
                     </div>
                 ))}
               </div>
@@ -684,12 +727,30 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="flex relative h-[1920px]">
-                <div className="w-[64px] shrink-0 border-r">
-                  {hours.map((hour, i) => (
-                    <div key={i} className="h-[80px] relative">
-                      <span className="absolute -top-[7px] right-2 text-[11px] text-muted-foreground font-medium">{format(setMinutes(setHours(new Date(), hour), 0), timeFormatStr, { locale: currentLocale })}</span>
+                <div className={cn("w-[64px] shrink-0 border-r flex", userData?.secondaryTzEnabled && "w-[128px]")}>
+                  <div className="flex-1">
+                    {hours.map((hour, i) => (
+                      <div key={i} className="h-[80px] relative">
+                        <span className="absolute -top-[7px] right-2 text-[11px] text-muted-foreground font-medium">{format(setMinutes(setHours(new Date(), hour), 0), timeFormatStr, { locale: currentLocale })}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {userData?.secondaryTzEnabled && (
+                    <div className="flex-1 border-l bg-accent/10">
+                      {hours.map((hour, i) => (
+                        <div key={i} className="h-[80px] relative">
+                          <span className="absolute -top-[7px] right-2 text-[11px] text-primary/60 font-medium">
+                            {new Date().toLocaleTimeString('tr-TR', { 
+                              timeZone: userData.secondaryTimezone || 'America/New_York',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: userData.timeFormat === '12'
+                            })}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
 
                 <div className="flex-1 relative border-t grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
@@ -710,8 +771,9 @@ export default function DashboardPage() {
                           const start = parseISO(event.start); const end = parseISO(event.end);
                           const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
                           const height = (differenceInMinutes(end, start) / 60) * 80;
+                          const isPast = userData?.dimPastEvents && isBefore(end, new Date());
                           return (
-                            <div key={event.id || event.uniqueId} className="absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-md border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden"
+                            <div key={event.id || event.uniqueId} className={cn("absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-md border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden", isPast && "opacity-40 grayscale-[0.3]")}
                               style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color, borderColor: 'rgba(0,0,0,0.1)' }}
                               onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
                             >
@@ -755,13 +817,18 @@ export default function DashboardPage() {
             </div>
             <button onClick={() => setIsInfoOpen(false)} className="p-1 hover:bg-accent rounded-full"><X className="w-5 h-5" /></button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatScrollRef}>
             {aiMessages.map((msg, i) => (
               <div key={i} className={cn("max-w-[85%] p-3 rounded-2xl text-sm", msg.role === 'user' ? "bg-primary text-primary-foreground ml-auto" : "bg-accent text-foreground mr-auto")}>
                 {msg.text}
               </div>
             ))}
-            {isAiLoading && <div className="text-xs text-primary animate-pulse ml-4">{t('assistantThinking')}</div>}
+            {currentlyTyping && (
+              <div className="max-w-[85%] p-3 rounded-2xl text-sm bg-accent text-foreground mr-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {currentlyTyping}
+              </div>
+            )}
+            {isAiLoading && !currentlyTyping && <div className="text-xs text-primary animate-pulse ml-4">{t('assistantThinking')}</div>}
           </div>
           <div className="p-4 border-t">
             <div className="flex gap-2 bg-accent rounded-full px-4 py-2 border">
@@ -778,52 +845,6 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- EVENT MODAL --- */}
-      <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
-        <DialogContent className="sm:max-w-[550px] bg-background p-0 overflow-hidden shadow-2xl rounded-xl">
-          <VisuallyHidden><DialogTitle>{t('event')}</DialogTitle></VisuallyHidden>
-          <div className="flex items-center justify-between p-2 bg-accent/20">
-            <button onClick={() => setIsEventModalOpen(false)} className="p-2 hover:bg-accent rounded-full text-muted-foreground ml-auto"><X className="w-5 h-5" /></button>
-          </div>
-          <div className="p-6 pt-2 space-y-6 flex flex-col h-full overflow-hidden">
-            <input 
-              type="text" 
-              placeholder={t('title')}
-              value={eventForm.title}
-              onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
-              className="w-full bg-transparent text-[24px] placeholder-muted-foreground outline-none border-b-2 focus:border-primary pb-1 transition-colors"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              {['Etkinlik', 'Görev'].map(tab => {
-                const label = tab === 'Etkinlik' ? t('event') : t('task');
-                return <button key={tab} onClick={() => setActiveTab(tab)} className={cn("px-4 py-1.5 rounded-full text-sm font-medium transition-all", activeEventTab === tab ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent")}>{label}</button>;
-              })}
-            </div>
-            <div className="space-y-5">
-              <div className="flex items-start gap-4">
-                <Clock className="w-5 h-5 text-muted-foreground mt-1 shrink-0" />
-                <div className="flex flex-col gap-2 w-full">
-                  <div className="flex items-center gap-2">
-                    <input type="datetime-local" value={eventForm.start} onChange={(e) => setEventForm({...eventForm, start: e.target.value})} className="bg-accent/50 border rounded px-2 py-1 text-sm outline-none" />
-                    <span className="text-muted-foreground">-</span>
-                    <input type="datetime-local" value={eventForm.end} onChange={(e) => setEventForm({...eventForm, end: e.target.value})} className="bg-accent/50 border rounded px-2 py-1 text-sm outline-none" />
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-start gap-4 group">
-                <AlignLeft className="w-5 h-5 text-muted-foreground shrink-0 mt-1" />
-                <textarea placeholder={t('description')} value={eventForm.description} onChange={(e) => setEventForm({...eventForm, description: e.target.value})} className="bg-transparent text-sm outline-none w-full min-h-[60px] resize-none" />
-              </div>
-            </div>
-          </div>
-          <div className="p-4 border-t flex items-center justify-end gap-3 bg-accent/10">
-            {selectedEvent && <button onClick={async () => { await deleteDoc(doc(db, 'users', user?.uid!, 'events', selectedEvent.id)); setIsEventModalOpen(false); toast({title: t('delete')}); }} className="text-sm font-medium text-destructive hover:bg-destructive/10 px-4 py-2 rounded-md">{t('delete')}</button>}
-            <button onClick={handleSaveEvent} className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-2 rounded-full text-sm font-medium transition-all shadow-lg">{t('save')}</button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* --- QR MODAL --- */}
       <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
         <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden">
@@ -834,38 +855,15 @@ export default function DashboardPage() {
           </div>
           <div className="flex flex-col items-center gap-6 py-10 px-6">
             <div className="p-4 bg-white rounded-2xl shadow-2xl">
-              <QRCodeSVG value={`${typeof window !== 'undefined' ? window.location.origin : ''}/book/${user?.uid}/default`} size={220} level="H" includeMargin={true} />
+              {isClient && (
+                <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={220} level="H" includeMargin={true} />
+              )}
             </div>
             <div className="text-center space-y-3 w-full">
               <div className="flex items-center gap-2 bg-accent p-2 rounded-lg border w-full">
-                <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/book/${user?.uid}/default`} className="bg-transparent text-xs text-primary flex-1 outline-none truncate" />
+                <input readOnly value={isClient ? `${window.location.origin}/book/${user?.uid}/default` : ''} className="bg-transparent text-xs text-primary flex-1 outline-none truncate" />
                 <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/book/${user?.uid}/default`); toast({title: t('copyLink')}); }} className="p-1.5 hover:bg-accent rounded transition-colors"><LinkIcon className="w-4 h-4" /></button>
               </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* --- SEARCHABLE COUNTRY HOLIDAY MODAL --- */}
-      <Dialog open={isCountryModalOpen} onOpenChange={setIsCountryModalOpen}>
-        <DialogContent className="sm:max-w-[400px] p-0">
-          <VisuallyHidden><DialogTitle>{t('countryHoliday')}</DialogTitle></VisuallyHidden>
-          <div className="p-4 border-b bg-accent/50 flex items-center justify-between">
-            <h2 className="font-semibold">{t('countryHoliday')}</h2>
-            <button onClick={() => setIsCountryModalOpen(false)} className="p-1 hover:bg-accent rounded-full"><X className="w-5 h-5" /></button>
-          </div>
-          <div className="p-4 space-y-4">
-            <div className="relative">
-              <SearchIcon className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search country..." className="pl-9" />
-            </div>
-            <div className="max-h-[300px] overflow-y-auto space-y-1 custom-scrollbar">
-              {COUNTRY_LIST.map(c => (
-                <button key={c.code} onClick={() => { if (!selectedCountries.includes(c.code)) { setSelectedCountries([...selectedCountries, c.code]); } setIsCountryModalOpen(false); }} className="w-full flex items-center justify-between px-3 py-2 hover:bg-accent rounded-md transition-colors text-sm">
-                  <span>{c.name}</span>
-                  <span className="text-muted-foreground font-mono">{c.code}</span>
-                </button>
-              ))}
             </div>
           </div>
         </DialogContent>
@@ -874,4 +872,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

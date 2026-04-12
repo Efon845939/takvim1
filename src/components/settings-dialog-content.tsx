@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   ArrowLeft, 
   Settings2, 
@@ -12,10 +11,7 @@ import {
   Sun, 
   Moon, 
   Shield, 
-  Bell, 
-  Keyboard, 
   Plus,
-  Mail,
   Zap,
   Info
 } from 'lucide-react';
@@ -28,7 +24,6 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { SettingsPlaceholder } from './settings-placeholders';
 import { useFirestore } from '@/firebase';
@@ -162,14 +157,10 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
     { id: 'takvim-abone', label: t('takvimAbone'), parent: 'takvim-ekle' },
     { id: 'yeni-takvim', label: t('yeniTakvim'), parent: 'takvim-ekle' },
     { id: 'ilginc-takvimler', label: t('ilgincTakvimler'), parent: 'takvim-ekle' },
-    { id: 'takvim-ayarlari', label: t('takvimAyarlari'), type: 'header' },
-    { id: 'user-calendar', label: user?.displayName || 'Personal', parent: 'takvim-ayarlari' },
-    { id: 'family-calendar', label: 'Family', parent: 'takvim-ayarlari' },
   ];
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
-      {/* Header */}
       <div className="h-16 border-b flex items-center px-6 gap-6 shrink-0 bg-background/50 backdrop-blur-md sticky top-0 z-10">
         <button onClick={onClose} className="p-2 hover:bg-accent rounded-full transition-colors">
           <ArrowLeft className="w-6 h-6" />
@@ -178,7 +169,6 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
         <aside className="w-[300px] border-r py-6 overflow-y-auto bg-muted/20 custom-scrollbar shrink-0">
           <div className="space-y-1">
             {navItems.map((item) => (
@@ -206,7 +196,6 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
           </div>
         </aside>
 
-        {/* Content */}
         <main className="flex-1 p-12 overflow-y-auto bg-background custom-scrollbar">
           <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
             {activeTab === 'dil-bolge' && (
@@ -224,24 +213,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                     <Label>{t('ulke')}</Label>
                     <Select defaultValue={userData?.region || "TR"} onValueChange={(v) => updateUserSetting('region', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="TR">Türkiye</SelectItem>
-                        <SelectItem value="US">USA</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
-                    <Label>{t('tarihBicimi')}</Label>
-                    <Select defaultValue={userData?.dateFormat || "dmy"} onValueChange={(v) => updateUserSetting('dateFormat', v)}>
-                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="dmy">31/12/2026</SelectItem><SelectItem value="mdy">12/31/2026</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
-                    <Label>{t('saatBicimi')}</Label>
-                    <Select defaultValue={userData?.timeFormat || "24"} onValueChange={(v) => updateUserSetting('timeFormat', v)}>
-                      <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="24">13:00</SelectItem><SelectItem value="12">01:00 PM</SelectItem></SelectContent>
+                      <SelectContent><SelectItem value="TR">Türkiye</SelectItem><SelectItem value="US">USA</SelectItem></SelectContent>
                     </Select>
                   </div>
                 </div>
@@ -262,16 +234,11 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                     </Select>
                   </div>
                   <div className="flex items-center justify-between gap-4 border-b pb-6">
-                    <div className="space-y-0.5">
-                      <Label>{t('ikincilSaatDilimiGoster')}</Label>
-                    </div>
-                    <Switch 
-                      checked={userData?.secondaryTzEnabled || false} 
-                      onCheckedChange={(checked) => updateUserSetting('secondaryTzEnabled', checked)} 
-                    />
+                    <Label>{t('ikincilSaatDilimiGoster')}</Label>
+                    <Switch checked={userData?.secondaryTzEnabled || false} onCheckedChange={(v) => updateUserSetting('secondaryTzEnabled', v)} />
                   </div>
-                  {(userData?.secondaryTzEnabled) && (
-                    <div className="grid grid-cols-2 gap-8 items-center border-b pb-6 animate-in slide-in-from-top-2 duration-300">
+                  {userData?.secondaryTzEnabled && (
+                    <div className="grid grid-cols-2 gap-8 items-center border-b pb-6 animate-in slide-in-from-top-2">
                       <Label>{t('ikincilSaatDilimi')}</Label>
                       <Select defaultValue={userData?.secondaryTimezone || "America/New_York"} onValueChange={(v) => updateUserSetting('secondaryTimezone', v)}>
                         <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
@@ -288,26 +255,9 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
             {activeTab === 'dunya-saati' && (
               <section className="space-y-8">
                 <h3 className="text-2xl font-normal">{t('dunyaSaati')}</h3>
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between border-b pb-6">
-                    <Label>{t('dunyaSaatiniGoster')}</Label>
-                    <Switch 
-                      checked={userData?.worldClockEnabled || false} 
-                      onCheckedChange={(checked) => updateUserSetting('worldClockEnabled', checked)} 
-                    />
-                  </div>
-                  {userData?.worldClockEnabled && (
-                    <div className="p-6 bg-muted/30 rounded-xl border space-y-4 animate-in zoom-in-95 duration-300">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">İstanbul</span>
-                        <WorldClock timezone="Europe/Istanbul" />
-                      </div>
-                      <div className="flex justify-between items-center text-muted-foreground">
-                        <span className="text-sm">New York</span>
-                        <WorldClock timezone="America/New_York" />
-                      </div>
-                    </div>
-                  )}
+                <div className="flex items-center justify-between border-b pb-6">
+                  <Label>{t('dunyaSaatiniGoster')}</Label>
+                  <Switch checked={userData?.worldClockEnabled || false} onCheckedChange={(v) => updateUserSetting('worldClockEnabled', v)} />
                 </div>
               </section>
             )}
@@ -317,37 +267,25 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                 <h3 className="text-2xl font-normal">{t('gorunumSecenekleri')}</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <Palette className="w-5 h-5 text-primary" />
-                      <Label>{t('temaSecimi')}</Label>
-                    </div>
-                    <Select value={theme} onValueChange={(v) => {
-                      setTheme(v);
-                      updateUserSetting('theme', v);
-                    }}>
-                      <SelectTrigger className="w-[140px] bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="light"><div className="flex items-center gap-2"><Sun className="w-4 h-4" /> {t('acik')}</div></SelectItem>
-                        <SelectItem value="dark"><div className="flex items-center gap-2"><Moon className="w-4 h-4" /> {t('koyu')}</div></SelectItem>
-                        <SelectItem value="system"><div className="flex items-center gap-2"><Monitor className="w-4 h-4" /> {t('otomatik')}</div></SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Hafta sonlarını göster</Label>
+                    <Switch checked={userData?.showWeekends !== false} onCheckedChange={(v) => updateUserSetting('showWeekends', v)} />
                   </div>
-
                   <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <Zap className="w-5 h-5 text-primary" />
-                      <Label>{t('yogunluk')}</Label>
-                    </div>
-                    <Select defaultValue={userData?.density || "comfortable"} onValueChange={(v) => updateUserSetting('density', v)}>
-                      <SelectTrigger className="w-[140px] bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Label>Hafta numaralarını göster</Label>
+                    <Switch checked={userData?.showWeekNumbers || false} onCheckedChange={(v) => updateUserSetting('showWeekNumbers', v)} />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+                    <Label>Geçmiş etkinliklerin parlaklığını azalt</Label>
+                    <Switch checked={userData?.dimPastEvents || false} onCheckedChange={(v) => updateUserSetting('dimPastEvents', v)} />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+                    <Label>{t('temaSecimi')}</Label>
+                    <Select value={theme} onValueChange={(v) => { setTheme(v); updateUserSetting('theme', v); }}>
+                      <SelectTrigger className="w-[140px] bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="comfortable">{t('raat')}</SelectItem>
-                        <SelectItem value="compact">{t('kompakt')}</SelectItem>
+                        <SelectItem value="light">Açık</SelectItem>
+                        <SelectItem value="dark">Koyu</SelectItem>
+                        <SelectItem value="system">Sistem</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -355,44 +293,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
               </section>
             )}
 
-            {activeTab === 'workspace' && (
-              <section className="space-y-8">
-                <h3 className="text-2xl font-normal">{t('workspace')}</h3>
-                <div className="space-y-6">
-                  <div className="flex items-start gap-4 p-4 bg-blue-500/5 rounded-lg border border-blue-500/10">
-                    <Info className="w-5 h-5 text-blue-500 mt-1 shrink-0" />
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
-                      {t('workspaceInfo')}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between border-b pb-6">
-                    <Label>{t('gmailEtkinlikleri')}</Label>
-                    <Switch 
-                      checked={userData?.gmailEventsEnabled !== false} 
-                      onCheckedChange={(checked) => updateUserSetting('gmailEventsEnabled', checked)} 
-                    />
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {activeTab === 'kisayollar' && (
-              <section className="space-y-8">
-                <h3 className="text-2xl font-normal">{t('kisayollar')}</h3>
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between border-b pb-6">
-                    <Label>{t('kisayollarEtkin')}</Label>
-                    <Switch 
-                      checked={userData?.shortcutsEnabled !== false} 
-                      onCheckedChange={(checked) => updateUserSetting('shortcutsEnabled', checked)} 
-                    />
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* Placeholder for other tabs */}
-            {!['dil-bolge', 'saat-dilimi', 'dunya-saati', 'gorunum-secenekleri', 'workspace', 'kisayollar'].includes(activeTab) && (
+            {!['dil-bolge', 'saat-dilimi', 'dunya-saati', 'gorunum-secenekleri'].includes(activeTab) && (
               <SettingsPlaceholder tabId={activeTab} />
             )}
           </div>
@@ -401,19 +302,3 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
     </div>
   );
 }
-
-function WorldClock({ timezone }: { timezone: string }) {
-  const [time, setTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 60000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return (
-    <span className="text-lg font-mono font-medium">
-      {time.toLocaleTimeString('tr-TR', { timeZone: timezone, hour: '2-digit', minute: '2-digit' })}
-    </span>
-  );
-}
-
