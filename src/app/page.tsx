@@ -130,7 +130,7 @@ export default function DashboardPage() {
   
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [gmtOffset, setGmtOffset] = useState('');
+  const [isClient, setIsClient] = useState(false);
   const gridScrollRef = useRef<HTMLDivElement>(null);
   
   const [hideWeekends, setHideWeekends] = useState(false);
@@ -186,7 +186,7 @@ export default function DashboardPage() {
 
   // --- HYDRATION FIX & REFRESH ---
   useEffect(() => {
-    setGmtOffset(`GMT${format(new Date(), 'X')}`);
+    setIsClient(true);
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
@@ -234,6 +234,14 @@ export default function DashboardPage() {
   }, [db, user?.uid]);
   
   const { data: userData } = useDoc(userDocRef);
+
+  // SYNC PERSISTED SETTINGS
+  useEffect(() => {
+    if (userData) {
+      if (userData.selectedCountries) setSelectedCountries(userData.selectedCountries);
+      if (userData.theme) setTheme(userData.theme);
+    }
+  }, [userData, setTheme]);
 
   const isTeacher = ["proturkgamerefe@gmail.com", "sintiya.ugur@bahcesehir.k12.tr"].includes(user?.email || "");
 
@@ -557,10 +565,10 @@ export default function DashboardPage() {
 
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* SADECE HAFTA VE GÜN GÖRÜNÜMÜNDE GÖSTERİLECEK ÜST HEADER */}
-          {(view === 'hafta' || view === 'gün') && (
+          {isClient && (view === 'hafta' || view === 'gün') && (
             <div className="flex pr-[15px] shrink-0 border-b bg-background/50 sticky top-0 z-20">
               <div className="w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-2">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">GMT+03</span>
+                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">GMT{format(currentDate, 'X')}</span>
               </div>
               <div className={cn("flex-1 grid", view === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
                 {weekDays.map((day, i) => (
@@ -672,6 +680,7 @@ export default function DashboardPage() {
       {/* --- SETTINGS MODAL --- */}
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-full h-full p-0 m-0 border-none rounded-none bg-background text-foreground flex flex-col overflow-hidden">
+          <VisuallyHidden><DialogTitle>Ayarlar Paneli</DialogTitle></VisuallyHidden>
           <SettingsDialogContent 
             onClose={() => setIsSettingsOpen(false)} 
             user={user}
@@ -743,7 +752,6 @@ export default function DashboardPage() {
             </div>
             {activeEventTab === 'Randevu programı' ? (
               <div className="flex-1 overflow-y-auto space-y-6 custom-scrollbar pr-2 pb-20">
-                 {/* Simplified version for page.tsx refactor focus */}
                  <div className="p-4 bg-accent/20 rounded-lg">Randevu programı detayları...</div>
               </div>
             ) : (
@@ -823,3 +831,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

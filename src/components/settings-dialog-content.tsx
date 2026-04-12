@@ -30,6 +30,9 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { SettingsPlaceholder } from './settings-placeholders';
+import { useFirestore } from '@/firebase';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 interface SettingsDialogContentProps {
   onClose: () => void;
@@ -52,9 +55,21 @@ const TIMEZONES = [
 
 export function SettingsDialogContent({ onClose, user, userData, theme, setTheme }: SettingsDialogContentProps) {
   const [activeTab, setActiveTab] = useState('dil-bolge');
-  const [secondaryTzEnabled, setSecondaryTzEnabled] = useState(false);
-  const [worldClockEnabled, setWorldClockEnabled] = useState(false);
-  const [density, setDensity] = useState('comfortable');
+  const db = useFirestore();
+  const { toast } = useToast();
+
+  const updateUserSetting = async (field: string, value: any) => {
+    if (!user?.uid) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        [field]: value,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Settings update error:', error);
+      toast({ variant: 'destructive', title: 'Hata', description: 'Ayarlar kaydedilemedi.' });
+    }
+  };
 
   const navItems = [
     { id: 'genel', label: 'Genel', icon: Settings2, type: 'header' },
@@ -123,14 +138,14 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>Dil</Label>
-                    <Select defaultValue="tr">
+                    <Select defaultValue={userData?.language || "tr"} onValueChange={(v) => updateUserSetting('language', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>Ülke</Label>
-                    <Select defaultValue="TR">
+                    <Select defaultValue={userData?.region || "TR"} onValueChange={(v) => updateUserSetting('region', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="TR">Türkiye</SelectItem>
@@ -140,14 +155,14 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                   </div>
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>Tarih biçimi</Label>
-                    <Select defaultValue="dmy">
+                    <Select defaultValue={userData?.dateFormat || "dmy"} onValueChange={(v) => updateUserSetting('dateFormat', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="dmy">31/12/2026</SelectItem><SelectItem value="mdy">12/31/2026</SelectItem></SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>Saat biçimi</Label>
-                    <Select defaultValue="24">
+                    <Select defaultValue={userData?.timeFormat || "24"} onValueChange={(v) => updateUserSetting('timeFormat', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="24">13:00</SelectItem><SelectItem value="12">01:00 PM</SelectItem></SelectContent>
                     </Select>
@@ -162,7 +177,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>Birincil saat dilimi</Label>
-                    <Select defaultValue={userData?.timezone || 'Europe/Istanbul'}>
+                    <Select defaultValue={userData?.timezone || 'Europe/Istanbul'} onValueChange={(v) => updateUserSetting('timezone', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {TIMEZONES.map(tz => <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>)}
@@ -174,12 +189,15 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                       <Label>İkincil saat dilimini göster</Label>
                       <p className="text-xs text-muted-foreground">İkincil bir saat dilimi ekleyerek planlamalarınızı yönetin.</p>
                     </div>
-                    <Switch checked={secondaryTzEnabled} onCheckedChange={setSecondaryTzEnabled} />
+                    <Switch 
+                      checked={userData?.secondaryTzEnabled || false} 
+                      onCheckedChange={(checked) => updateUserSetting('secondaryTzEnabled', checked)} 
+                    />
                   </div>
-                  {secondaryTzEnabled && (
+                  {(userData?.secondaryTzEnabled) && (
                     <div className="grid grid-cols-2 gap-8 items-center border-b pb-6 animate-in slide-in-from-top-2 duration-300">
                       <Label>İkincil saat dilimi</Label>
-                      <Select defaultValue="America/New_York">
+                      <Select defaultValue={userData?.secondaryTimezone || "America/New_York"} onValueChange={(v) => updateUserSetting('secondaryTimezone', v)}>
                         <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {TIMEZONES.map(tz => <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>)}
@@ -197,9 +215,12 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                 <div className="space-y-6">
                   <div className="flex items-center justify-between border-b pb-6">
                     <Label>Dünya saatini göster</Label>
-                    <Switch checked={worldClockEnabled} onCheckedChange={setWorldClockEnabled} />
+                    <Switch 
+                      checked={userData?.worldClockEnabled || false} 
+                      onCheckedChange={(checked) => updateUserSetting('worldClockEnabled', checked)} 
+                    />
                   </div>
-                  {worldClockEnabled && (
+                  {userData?.worldClockEnabled && (
                     <div className="p-6 bg-muted/30 rounded-xl border space-y-4 animate-in zoom-in-95 duration-300">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">İstanbul</span>
@@ -224,7 +245,10 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                       <Palette className="w-5 h-5 text-primary" />
                       <Label>Tema Seçimi</Label>
                     </div>
-                    <Select value={theme} onValueChange={(v) => setTheme(v)}>
+                    <Select value={theme} onValueChange={(v) => {
+                      setTheme(v);
+                      updateUserSetting('theme', v);
+                    }}>
                       <SelectTrigger className="w-[140px] bg-background">
                         <SelectValue />
                       </SelectTrigger>
@@ -241,7 +265,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                       <Zap className="w-5 h-5 text-primary" />
                       <Label>Yoğunluk</Label>
                     </div>
-                    <Select value={density} onValueChange={setDensity}>
+                    <Select defaultValue={userData?.density || "comfortable"} onValueChange={(v) => updateUserSetting('density', v)}>
                       <SelectTrigger className="w-[140px] bg-background">
                         <SelectValue />
                       </SelectTrigger>
@@ -267,7 +291,10 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                   </div>
                   <div className="flex items-center justify-between border-b pb-6">
                     <Label>Gmail etkinliklerini otomatik göster</Label>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={userData?.gmailEventsEnabled !== false} 
+                      onCheckedChange={(checked) => updateUserSetting('gmailEventsEnabled', checked)} 
+                    />
                   </div>
                 </div>
               </section>
@@ -279,7 +306,10 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                 <div className="space-y-6">
                   <div className="flex items-center justify-between border-b pb-6">
                     <Label>Klavye kısayollarını etkinleştir</Label>
-                    <Switch defaultChecked />
+                    <Switch 
+                      checked={userData?.shortcutsEnabled !== false} 
+                      onCheckedChange={(checked) => updateUserSetting('shortcutsEnabled', checked)} 
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-muted/30 rounded-lg border flex justify-between items-center">
