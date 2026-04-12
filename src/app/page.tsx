@@ -30,7 +30,8 @@ import {
   subMonths,
   addDays as addDaysFn,
   subDays as subDaysFn,
-  isSameMonth
+  isSameMonth,
+  setSeconds
 } from 'date-fns';
 import { tr, enUS } from 'date-fns/locale';
 import { 
@@ -686,7 +687,7 @@ export default function DashboardPage() {
                 <div className="w-[64px] shrink-0 border-r">
                   {hours.map((hour, i) => (
                     <div key={i} className="h-[80px] relative">
-                      <span className="absolute -top-[7px] right-2 text-[11px] text-muted-foreground font-medium">{format(setHours(new Date(), hour), timeFormatStr, { locale: currentLocale })}</span>
+                      <span className="absolute -top-[7px] right-2 text-[11px] text-muted-foreground font-medium">{format(setMinutes(setHours(new Date(), hour), 0), timeFormatStr, { locale: currentLocale })}</span>
                     </div>
                   ))}
                 </div>

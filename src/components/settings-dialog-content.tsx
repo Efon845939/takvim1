@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -53,10 +54,86 @@ const TIMEZONES = [
   { value: 'Asia/Dubai', label: 'Dubai (GMT+4)' },
 ];
 
+const translations = {
+  tr: {
+    settings: 'Ayarlar',
+    genel: 'Genel',
+    dilBolge: 'Dil ve bölge',
+    saatDilimi: 'Saat dilimi',
+    dunyaSaati: 'Dünya saati',
+    etkinlikAyarlari: 'Etkinlik ayarları',
+    bildirimAyarlari: 'Bildirim ayarları',
+    gorunumSecenekleri: 'Görünüm seçenekleri',
+    workspace: 'Google Workspace özellikleri',
+    kisayollar: 'Klavye kısayolları',
+    takvimEkle: 'Takvim ekle',
+    takvimAbone: 'Takvime abone ol',
+    yeniTakvim: 'Yeni takvim oluştur',
+    ilgincTakvimler: 'İlginç takvimler',
+    takvimAyarlari: 'Takvimlerimin ayarları',
+    dil: 'Dil',
+    ulke: 'Ülke',
+    tarihBicimi: 'Tarih biçimi',
+    saatBicimi: 'Saat biçimi',
+    birincilSaatDilimi: 'Birincil saat dilimi',
+    ikincilSaatDilimiGoster: 'İkincil saat dilimini göster',
+    ikincilSaatDilimi: 'İkincil saat dilimi',
+    dunyaSaatiniGoster: 'Dünya saatini göster',
+    temaSecimi: 'Tema Seçimi',
+    yogunluk: 'Yoğunluk',
+    workspaceInfo: 'Workspace akıllı özellikleri, Gmail\'deki uçuş ve rezervasyon bilgilerini otomatik olarak takviminize ekler.',
+    gmailEtkinlikleri: 'Gmail etkinliklerini otomatik göster',
+    kisayollarEtkin: 'Klavye kısayollarını etkinleştir',
+    acik: 'Açık',
+    koyu: 'Koyu',
+    otomatik: 'Otomatik',
+    raat: 'Rahat',
+    kompakt: 'Kompakt'
+  },
+  en: {
+    settings: 'Settings',
+    genel: 'General',
+    dilBolge: 'Language and region',
+    saatDilimi: 'Time zone',
+    dunyaSaati: 'World clock',
+    etkinlikAyarlari: 'Event settings',
+    bildirimAyarlari: 'Notification settings',
+    gorunumSecenekleri: 'Appearance options',
+    workspace: 'Google Workspace features',
+    kisayollar: 'Keyboard shortcuts',
+    takvimEkle: 'Add calendar',
+    takvimAbone: 'Subscribe to calendar',
+    yeniTakvim: 'Create new calendar',
+    ilgincTakvimler: 'Interesting calendars',
+    takvimAyarlari: 'Settings for my calendars',
+    dil: 'Language',
+    ulke: 'Country',
+    tarihBicimi: 'Date format',
+    saatBicimi: 'Time format',
+    birincilSaatDilimi: 'Primary time zone',
+    ikincilSaatDilimiGoster: 'Show secondary time zone',
+    ikincilSaatDilimi: 'Secondary time zone',
+    dunyaSaatiniGoster: 'Show world clock',
+    temaSecimi: 'Theme Selection',
+    yogunluk: 'Density',
+    workspaceInfo: 'Workspace smart features automatically add flight and booking information from Gmail to your calendar.',
+    gmailEtkinlikleri: 'Automatically show Gmail events',
+    kisayollarEtkin: 'Enable keyboard shortcuts',
+    acik: 'Light',
+    koyu: 'Dark',
+    otomatik: 'Automatic',
+    raat: 'Comfortable',
+    kompakt: 'Compact'
+  }
+};
+
 export function SettingsDialogContent({ onClose, user, userData, theme, setTheme }: SettingsDialogContentProps) {
   const [activeTab, setActiveTab] = useState('dil-bolge');
   const db = useFirestore();
   const { toast } = useToast();
+
+  const lang = userData?.language === 'en' ? 'en' : 'tr';
+  const t = (key: keyof typeof translations['tr']) => translations[lang][key] || key;
 
   const updateUserSetting = async (field: string, value: any) => {
     if (!user?.uid) return;
@@ -72,22 +149,22 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
   };
 
   const navItems = [
-    { id: 'genel', label: 'Genel', icon: Settings2, type: 'header' },
-    { id: 'dil-bolge', label: 'Dil ve bölge', parent: 'genel' },
-    { id: 'saat-dilimi', label: 'Saat dilimi', parent: 'genel' },
-    { id: 'dunya-saati', label: 'Dünya saati', parent: 'genel' },
-    { id: 'etkinlik-ayarlari', label: 'Etkinlik ayarları', parent: 'genel' },
-    { id: 'bildirim-ayarlari', label: 'Bildirim ayarları', parent: 'genel' },
-    { id: 'gorunum-secenekleri', label: 'Görünüm seçenekleri', parent: 'genel' },
-    { id: 'workspace', label: 'Google Workspace özellikleri', parent: 'genel' },
-    { id: 'kisayollar', label: 'Klavye kısayolları', parent: 'genel' },
-    { id: 'takvim-ekle', label: 'Takvim ekle', icon: Plus, type: 'header' },
-    { id: 'takvim-abone', label: 'Takvime abone ol', parent: 'takvim-ekle' },
-    { id: 'yeni-takvim', label: 'Yeni takvim oluştur', parent: 'takvim-ekle' },
-    { id: 'ilginc-takvimler', label: 'İlginç takvimler', parent: 'takvim-ekle' },
-    { id: 'takvim-ayarlari', label: 'Takvimlerimin ayarları', type: 'header' },
-    { id: 'user-calendar', label: user?.displayName || 'Kişisel', parent: 'takvim-ayarlari' },
-    { id: 'family-calendar', label: 'Aile', parent: 'takvim-ayarlari' },
+    { id: 'genel', label: t('genel'), icon: Settings2, type: 'header' },
+    { id: 'dil-bolge', label: t('dilBolge'), parent: 'genel' },
+    { id: 'saat-dilimi', label: t('saatDilimi'), parent: 'genel' },
+    { id: 'dunya-saati', label: t('dunyaSaati'), parent: 'genel' },
+    { id: 'etkinlik-ayarlari', label: t('etkinlikAyarlari'), parent: 'genel' },
+    { id: 'bildirim-ayarlari', label: t('bildirimAyarlari'), parent: 'genel' },
+    { id: 'gorunum-secenekleri', label: t('gorunumSecenekleri'), parent: 'genel' },
+    { id: 'workspace', label: t('workspace'), parent: 'genel' },
+    { id: 'kisayollar', label: t('kisayollar'), parent: 'genel' },
+    { id: 'takvim-ekle', label: t('takvimEkle'), icon: Plus, type: 'header' },
+    { id: 'takvim-abone', label: t('takvimAbone'), parent: 'takvim-ekle' },
+    { id: 'yeni-takvim', label: t('yeniTakvim'), parent: 'takvim-ekle' },
+    { id: 'ilginc-takvimler', label: t('ilgincTakvimler'), parent: 'takvim-ekle' },
+    { id: 'takvim-ayarlari', label: t('takvimAyarlari'), type: 'header' },
+    { id: 'user-calendar', label: user?.displayName || 'Personal', parent: 'takvim-ayarlari' },
+    { id: 'family-calendar', label: 'Family', parent: 'takvim-ayarlari' },
   ];
 
   return (
@@ -97,7 +174,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
         <button onClick={onClose} className="p-2 hover:bg-accent rounded-full transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h2 className="text-xl font-medium">Ayarlar</h2>
+        <h2 className="text-xl font-medium">{t('settings')}</h2>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -134,34 +211,34 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
           <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-500">
             {activeTab === 'dil-bolge' && (
               <section className="space-y-8">
-                <h3 className="text-2xl font-normal">Dil ve bölge</h3>
+                <h3 className="text-2xl font-normal">{t('dilBolge')}</h3>
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
-                    <Label>Dil</Label>
+                    <Label>{t('dil')}</Label>
                     <Select defaultValue={userData?.language || "tr"} onValueChange={(v) => updateUserSetting('language', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
-                    <Label>Ülke</Label>
+                    <Label>{t('ulke')}</Label>
                     <Select defaultValue={userData?.region || "TR"} onValueChange={(v) => updateUserSetting('region', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="TR">Türkiye</SelectItem>
-                        <SelectItem value="US">Amerika Birleşik Devletleri</SelectItem>
+                        <SelectItem value="US">USA</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
-                    <Label>Tarih biçimi</Label>
+                    <Label>{t('tarihBicimi')}</Label>
                     <Select defaultValue={userData?.dateFormat || "dmy"} onValueChange={(v) => updateUserSetting('dateFormat', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="dmy">31/12/2026</SelectItem><SelectItem value="mdy">12/31/2026</SelectItem></SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
-                    <Label>Saat biçimi</Label>
+                    <Label>{t('saatBicimi')}</Label>
                     <Select defaultValue={userData?.timeFormat || "24"} onValueChange={(v) => updateUserSetting('timeFormat', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="24">13:00</SelectItem><SelectItem value="12">01:00 PM</SelectItem></SelectContent>
@@ -173,10 +250,10 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
 
             {activeTab === 'saat-dilimi' && (
               <section className="space-y-8">
-                <h3 className="text-2xl font-normal">Saat dilimi</h3>
+                <h3 className="text-2xl font-normal">{t('saatDilimi')}</h3>
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
-                    <Label>Birincil saat dilimi</Label>
+                    <Label>{t('birincilSaatDilimi')}</Label>
                     <Select defaultValue={userData?.timezone || 'Europe/Istanbul'} onValueChange={(v) => updateUserSetting('timezone', v)}>
                       <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -186,8 +263,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                   </div>
                   <div className="flex items-center justify-between gap-4 border-b pb-6">
                     <div className="space-y-0.5">
-                      <Label>İkincil saat dilimini göster</Label>
-                      <p className="text-xs text-muted-foreground">İkincil bir saat dilimi ekleyerek planlamalarınızı yönetin.</p>
+                      <Label>{t('ikincilSaatDilimiGoster')}</Label>
                     </div>
                     <Switch 
                       checked={userData?.secondaryTzEnabled || false} 
@@ -196,7 +272,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                   </div>
                   {(userData?.secondaryTzEnabled) && (
                     <div className="grid grid-cols-2 gap-8 items-center border-b pb-6 animate-in slide-in-from-top-2 duration-300">
-                      <Label>İkincil saat dilimi</Label>
+                      <Label>{t('ikincilSaatDilimi')}</Label>
                       <Select defaultValue={userData?.secondaryTimezone || "America/New_York"} onValueChange={(v) => updateUserSetting('secondaryTimezone', v)}>
                         <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -211,10 +287,10 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
 
             {activeTab === 'dunya-saati' && (
               <section className="space-y-8">
-                <h3 className="text-2xl font-normal">Dünya saati</h3>
+                <h3 className="text-2xl font-normal">{t('dunyaSaati')}</h3>
                 <div className="space-y-6">
                   <div className="flex items-center justify-between border-b pb-6">
-                    <Label>Dünya saatini göster</Label>
+                    <Label>{t('dunyaSaatiniGoster')}</Label>
                     <Switch 
                       checked={userData?.worldClockEnabled || false} 
                       onCheckedChange={(checked) => updateUserSetting('worldClockEnabled', checked)} 
@@ -238,12 +314,12 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
 
             {activeTab === 'gorunum-secenekleri' && (
               <section className="space-y-8">
-                <h3 className="text-2xl font-normal">Görünüm seçenekleri</h3>
+                <h3 className="text-2xl font-normal">{t('gorunumSecenekleri')}</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Palette className="w-5 h-5 text-primary" />
-                      <Label>Tema Seçimi</Label>
+                      <Label>{t('temaSecimi')}</Label>
                     </div>
                     <Select value={theme} onValueChange={(v) => {
                       setTheme(v);
@@ -253,9 +329,9 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="light"><div className="flex items-center gap-2"><Sun className="w-4 h-4" /> Açık</div></SelectItem>
-                        <SelectItem value="dark"><div className="flex items-center gap-2"><Moon className="w-4 h-4" /> Koyu</div></SelectItem>
-                        <SelectItem value="system"><div className="flex items-center gap-2"><Monitor className="w-4 h-4" /> Otomatik</div></SelectItem>
+                        <SelectItem value="light"><div className="flex items-center gap-2"><Sun className="w-4 h-4" /> {t('acik')}</div></SelectItem>
+                        <SelectItem value="dark"><div className="flex items-center gap-2"><Moon className="w-4 h-4" /> {t('koyu')}</div></SelectItem>
+                        <SelectItem value="system"><div className="flex items-center gap-2"><Monitor className="w-4 h-4" /> {t('otomatik')}</div></SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -263,15 +339,15 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                   <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Zap className="w-5 h-5 text-primary" />
-                      <Label>Yoğunluk</Label>
+                      <Label>{t('yogunluk')}</Label>
                     </div>
                     <Select defaultValue={userData?.density || "comfortable"} onValueChange={(v) => updateUserSetting('density', v)}>
                       <SelectTrigger className="w-[140px] bg-background">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="comfortable">Rahat</SelectItem>
-                        <SelectItem value="compact">Kompakt</SelectItem>
+                        <SelectItem value="comfortable">{t('raat')}</SelectItem>
+                        <SelectItem value="compact">{t('kompakt')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -281,16 +357,16 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
 
             {activeTab === 'workspace' && (
               <section className="space-y-8">
-                <h3 className="text-2xl font-normal">Google Workspace akıllı özellikleri</h3>
+                <h3 className="text-2xl font-normal">{t('workspace')}</h3>
                 <div className="space-y-6">
                   <div className="flex items-start gap-4 p-4 bg-blue-500/5 rounded-lg border border-blue-500/10">
                     <Info className="w-5 h-5 text-blue-500 mt-1 shrink-0" />
                     <p className="text-sm text-blue-700 dark:text-blue-300">
-                      Workspace akıllı özellikleri, Gmail'deki uçuş ve rezervasyon bilgilerini otomatik olarak takviminize ekler.
+                      {t('workspaceInfo')}
                     </p>
                   </div>
                   <div className="flex items-center justify-between border-b pb-6">
-                    <Label>Gmail etkinliklerini otomatik göster</Label>
+                    <Label>{t('gmailEtkinlikleri')}</Label>
                     <Switch 
                       checked={userData?.gmailEventsEnabled !== false} 
                       onCheckedChange={(checked) => updateUserSetting('gmailEventsEnabled', checked)} 
@@ -302,32 +378,14 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
 
             {activeTab === 'kisayollar' && (
               <section className="space-y-8">
-                <h3 className="text-2xl font-normal">Klavye kısayolları</h3>
+                <h3 className="text-2xl font-normal">{t('kisayollar')}</h3>
                 <div className="space-y-6">
                   <div className="flex items-center justify-between border-b pb-6">
-                    <Label>Klavye kısayollarını etkinleştir</Label>
+                    <Label>{t('kisayollarEtkin')}</Label>
                     <Switch 
                       checked={userData?.shortcutsEnabled !== false} 
                       onCheckedChange={(checked) => updateUserSetting('shortcutsEnabled', checked)} 
                     />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-muted/30 rounded-lg border flex justify-between items-center">
-                      <span className="text-sm">Etkinlik Oluştur</span>
-                      <kbd className="px-2 py-1 bg-background border rounded text-xs font-mono">C</kbd>
-                    </div>
-                    <div className="p-4 bg-muted/30 rounded-lg border flex justify-between items-center">
-                      <span className="text-sm">Bugüne Git</span>
-                      <kbd className="px-2 py-1 bg-background border rounded text-xs font-mono">T</kbd>
-                    </div>
-                    <div className="p-4 bg-muted/30 rounded-lg border flex justify-between items-center">
-                      <span className="text-sm">Arama</span>
-                      <kbd className="px-2 py-1 bg-background border rounded text-xs font-mono">/</kbd>
-                    </div>
-                    <div className="p-4 bg-muted/30 rounded-lg border flex justify-between items-center">
-                      <span className="text-sm">Kısayol Listesi</span>
-                      <kbd className="px-2 py-1 bg-background border rounded text-xs font-mono">?</kbd>
-                    </div>
                   </div>
                 </div>
               </section>
@@ -358,3 +416,4 @@ function WorldClock({ timezone }: { timezone: string }) {
     </span>
   );
 }
+
