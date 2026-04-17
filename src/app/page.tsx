@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -54,7 +55,8 @@ import {
   Monitor,
   Smartphone,
   Info,
-  MoreVertical
+  MoreVertical,
+  ArrowLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -106,11 +108,11 @@ const translations = {
     event: 'Etkinlik',
     task: 'Görev',
     bookings: 'Randevular',
-    loading: 'Yükleniyor...',
-    qrCode: 'Randevu QR Kodu',
+    loading: 'Veriler Yükleniyor...',
+    qrCode: 'Görüşme QR Kodu',
     assistant: 'AI Takvim Asistanı',
     assistantThinking: 'Asistan düşünüyor...',
-    askAssistant: 'Nasıl yardımcı olabilirim?...',
+    askAssistant: 'Takviminiz hakkında bir şeyler sorun...',
     myCalendars: 'Takvimlerim',
     personal: 'Kişisel',
     family: 'Aile'
@@ -129,11 +131,11 @@ const translations = {
     event: 'Event',
     task: 'Task',
     bookings: 'Bookings',
-    loading: 'Loading...',
-    qrCode: 'Appointment QR Code',
+    loading: 'Loading Data...',
+    qrCode: 'Booking QR Code',
     assistant: 'AI Calendar Assistant',
     assistantThinking: 'Assistant is thinking...',
-    askAssistant: 'How can I help you?...',
+    askAssistant: 'Ask something about your calendar...',
     myCalendars: 'My Calendars',
     personal: 'Personal',
     family: 'Family'
@@ -154,7 +156,7 @@ export default function DashboardPage() {
   const [view, setView] = useState<'gün' | 'hafta' | 'ay' | 'plan'>('hafta');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isClient, setIsClient] = useState(false);
-  const [uiMode, setUiMode] = useState<'pc' | 'mobile'>('pc'); // Manual UI Override
+  const [uiMode, setUiMode] = useState<'pc' | 'mobile'>('pc'); 
   
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -250,17 +252,21 @@ export default function DashboardPage() {
     return [...filtered].sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime());
   }, [eventsData, filters]);
 
-  const effectiveView = uiMode === 'mobile' ? 'gün' : view;
-
   const weekDays = React.useMemo(() => {
-    if (effectiveView === 'gün') return [currentDate];
+    if (view === 'gün') return [currentDate];
+    
+    // Mobil modda hafta görünümü 4 günlük olsun (Haftayı sığdırmak için)
+    if (uiMode === 'mobile' && view === 'hafta') {
+      return Array.from({ length: 4 }, (_, i) => addDays(currentDate, i));
+    }
+
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     let days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     if (userData?.showWeekends === false) {
       days = days.filter(d => getDay(d) !== 0 && getDay(d) !== 6);
     }
     return days;
-  }, [currentDate, userData?.showWeekends, effectiveView]);
+  }, [currentDate, userData?.showWeekends, view, uiMode]);
 
   const monthDays = React.useMemo(() => {
     const start = startOfMonth(currentDate);
@@ -343,7 +349,7 @@ export default function DashboardPage() {
       const response = await calendarHelper({ 
         message: msg, 
         history: newHistory,
-        userContext: `User: ${user?.displayName}, View: ${effectiveView}, Date: ${format(currentDate, 'yyyy-MM-dd')}` 
+        userContext: `User: ${user?.displayName}, View: ${view}, Date: ${format(currentDate, 'yyyy-MM-dd')}` 
       });
       
       const reply = response.reply;
@@ -360,7 +366,7 @@ export default function DashboardPage() {
         }
       }, 20);
     } catch (error) {
-      setAiMessages(prev => [...prev, { role: 'ai', text: 'Hata oluştu.' }]);
+      setAiMessages(prev => [...prev, { role: 'ai', text: 'Bir hata oluştu.' }]);
     } finally {
       setIsAiLoading(false);
     }
@@ -373,22 +379,22 @@ export default function DashboardPage() {
       setMiniCalendarMonth(today);
       return;
     }
-    if (effectiveView === 'ay') {
+    if (view === 'ay') {
       const nextMonth = dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1);
       setCurrentDate(nextMonth);
       setMiniCalendarMonth(nextMonth);
     } else {
-      const amount = effectiveView === 'gün' ? 1 : 7;
+      const amount = view === 'gün' ? 1 : (uiMode === 'mobile' ? 4 : 7);
       const fn = dir === 'next' ? addDaysFn : subDaysFn;
       setCurrentDate(prev => fn(prev, amount));
     }
   };
 
   const headerTitle = React.useMemo(() => {
-    if (effectiveView === 'ay') return format(currentDate, 'MMMM yyyy', { locale: currentLocale });
-    if (effectiveView === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: currentLocale });
+    if (view === 'ay') return format(currentDate, 'MMMM yyyy', { locale: currentLocale });
+    if (view === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: currentLocale });
     return `${format(weekDays[0], 'd')} – ${format(weekDays[weekDays.length - 1], 'd MMMM yyyy', { locale: currentLocale })}`;
-  }, [currentDate, weekDays, effectiveView, currentLocale]);
+  }, [currentDate, weekDays, view, currentLocale]);
 
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-background text-foreground">{t('loading')}</div>;
 
@@ -403,7 +409,7 @@ export default function DashboardPage() {
           </button>
           <div className="flex items-center gap-2 mr-2">
             <CalendarIcon className="w-5 h-5 text-primary" />
-            <span className="text-lg font-medium hidden sm:inline">Calendar</span>
+            <span className="text-lg font-medium hidden sm:inline">Takvim</span>
           </div>
           
           <div className="flex items-center gap-1">
@@ -415,26 +421,19 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* UI MODE TOGGLE */}
-          <button onClick={toggleUiMode} className="p-2 hover:bg-accent rounded-full transition-colors" title="Toggle UI Mode">
-            {uiMode === 'pc' ? <Smartphone className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
-          </button>
-
           <button onClick={() => setIsInfoOpen(true)} className="p-2 hover:bg-accent rounded-full transition-colors"><Sparkles className="w-5 h-5 text-primary" /></button>
           
-          {uiMode === 'pc' && (
-            <Select value={view} onValueChange={(v: any) => { setView(v); updateUserSetting('view', v); }}>
-              <SelectTrigger className="w-[100px] h-9 ml-2 bg-transparent font-medium text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gün">{t('day')}</SelectItem>
-                <SelectItem value="hafta">{t('week')}</SelectItem>
-                <SelectItem value="ay">{t('month')}</SelectItem>
-                <SelectItem value="plan">{t('schedule')}</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
+          <Select value={view} onValueChange={(v: any) => { setView(v); updateUserSetting('view', v); }}>
+            <SelectTrigger className="w-[80px] md:w-[100px] h-9 ml-2 bg-transparent font-medium text-xs md:text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gün">{t('day')}</SelectItem>
+              <SelectItem value="hafta">{t('week')}</SelectItem>
+              <SelectItem value="ay">{t('month')}</SelectItem>
+              <SelectItem value="plan">{t('schedule')}</SelectItem>
+            </SelectContent>
+          </Select>
 
           {!user ? (
             <div className="flex items-center gap-2">
@@ -478,6 +477,26 @@ export default function DashboardPage() {
           !sidebarOpen && "-translate-x-full absolute",
           sidebarOpen && (uiMode === 'pc' && !isMobileDevice) && "relative translate-x-0"
         )}>
+          {/* UI MODE TOGGLE (SİDEBAR'A TAŞINDI) */}
+          <div className="px-2">
+            <button 
+              onClick={toggleUiMode} 
+              className="flex items-center gap-3 w-full p-2.5 rounded-xl border hover:bg-accent transition-colors text-sm font-medium"
+            >
+              {uiMode === 'pc' ? (
+                <>
+                  <Smartphone className="w-5 h-5 text-muted-foreground" />
+                  Mobil Görünüme Geç
+                </>
+              ) : (
+                <>
+                  <Monitor className="w-5 h-5 text-muted-foreground" />
+                  Masaüstü Görünüme Geç
+                </>
+              )}
+            </button>
+          </div>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3 bg-card border shadow-sm px-4 py-3 rounded-full hover:bg-accent transition-all font-medium text-[14px] w-full">
@@ -564,14 +583,14 @@ export default function DashboardPage() {
         </aside>
 
         <main className="flex-1 flex flex-col overflow-hidden">
-          {isClient && (effectiveView === 'hafta' || effectiveView === 'gün') && (
+          {isClient && (view === 'hafta' || view === 'gün') && (
             <div className="flex shrink-0 border-b bg-background/50 sticky top-0 z-20">
               <div className="w-[48px] md:w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-2">
                 <span className="text-[9px] md:text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
                   GMT{isClient ? format(new Date(), 'X') : ''}
                 </span>
               </div>
-              <div className={cn("flex-1 grid", effectiveView === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
+              <div className={cn("flex-1 grid", view === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
                 {weekDays.map((day, i) => (
                     <div key={i} className="flex flex-col items-center justify-center py-2 md:py-4 gap-1">
                       <span className={cn("text-[10px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
@@ -585,7 +604,7 @@ export default function DashboardPage() {
           )}
 
           <div className="flex-1 overflow-y-auto relative" ref={gridScrollRef}>
-            {effectiveView === 'ay' ? (
+            {view === 'ay' ? (
               <div className="flex flex-col h-full min-h-[500px]">
                 <div className="grid grid-cols-7 border-b border-l bg-background sticky top-0 z-10">
                   {['Pt', 'Sl', 'Çr', 'Pr', 'Cm', 'Ct', 'Pz'].map(d => (
