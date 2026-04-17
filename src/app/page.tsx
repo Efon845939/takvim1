@@ -210,7 +210,6 @@ export default function DashboardPage() {
   // --- INITIALIZATION ---
   useEffect(() => {
     setIsClient(true);
-    // localStorage check to persist uiMode choice
     const savedUiMode = typeof window !== 'undefined' ? localStorage.getItem('uiMode') as 'pc' | 'mobile' : null;
     if (savedUiMode) {
       setUiMode(savedUiMode);
@@ -235,7 +234,10 @@ export default function DashboardPage() {
   // AUTO SCROLL CHAT
   useEffect(() => {
     if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+      chatScrollRef.current.scrollTo({
+        top: chatScrollRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
     }
   }, [aiMessages, currentlyTyping]);
 
@@ -256,7 +258,6 @@ export default function DashboardPage() {
   const weekDays = React.useMemo(() => {
     if (view === 'gün') return [currentDate];
     
-    // Mobil modda hafta görünümü 4 günlük olsun (Haftayı sığdırmak için)
     if (uiMode === 'mobile' && view === 'hafta') {
       return Array.from({ length: 4 }, (_, i) => addDays(currentDate, i));
     }
@@ -360,13 +361,17 @@ export default function DashboardPage() {
       setCurrentlyTyping("");
       
       const interval = setInterval(() => {
-        setCurrentlyTyping(prev => prev + reply[currentIdx]);
-        currentIdx++;
-        if (currentIdx >= reply.length) {
-          clearInterval(interval);
-          setAiMessages(prev => [...prev, { role: 'ai', text: reply }]);
-          setCurrentlyTyping("");
-        }
+        setCurrentlyTyping(prev => {
+          const nextChar = reply[currentIdx];
+          if (nextChar === undefined) {
+             clearInterval(interval);
+             setAiMessages(prevMsgs => [...prevMsgs, { role: 'ai', text: reply }]);
+             setCurrentlyTyping("");
+             return "";
+          }
+          currentIdx++;
+          return prev + nextChar;
+        });
       }, 20);
     } catch (error) {
       setAiMessages(prev => [...prev, { role: 'ai', text: 'Bir hata oluştu.' }]);
@@ -482,7 +487,6 @@ export default function DashboardPage() {
           !sidebarOpen && "-translate-x-full absolute",
           sidebarOpen && (uiMode === 'pc' && !isMobileDevice) && "relative translate-x-0"
         )}>
-          {/* UI MODE TOGGLE (SİDEBAR'A TAŞINDI) */}
           <div className="px-2">
             <button 
               onClick={toggleUiMode} 
@@ -595,7 +599,7 @@ export default function DashboardPage() {
                   GMT{isClient ? format(new Date(), 'X') : ''}
                 </span>
               </div>
-              <div className={cn("flex-1 grid", view === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
+              <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
                 {weekDays.map((day, i) => (
                     <div key={i} className="flex flex-col items-center justify-center py-2 md:py-4 gap-1">
                       <span className={cn("text-[10px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
@@ -682,7 +686,6 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* MOBILE FAB */}
       {uiMode === 'mobile' && (
         <button 
           onClick={() => { setSelectedEvent(null); setIsEventModalOpen(true); }}

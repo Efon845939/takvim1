@@ -172,14 +172,14 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>{t('dil')}</Label>
-                    <Select defaultValue={userData?.language || "tr"} onValueChange={(v) => updateUserSetting('language', v)}>
+                    <Select value={userData?.language || "tr"} onValueChange={(v) => updateUserSetting('language', v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="tr">Türkçe</SelectItem><SelectItem value="en">English</SelectItem></SelectContent>
                     </Select>
                   </div>
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>{t('saatBicimi')}</Label>
-                    <Select defaultValue={userData?.timeFormat || "24"} onValueChange={(v) => updateUserSetting('timeFormat', v)}>
+                    <Select value={userData?.timeFormat || "24"} onValueChange={(v) => updateUserSetting('timeFormat', v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="24">24 Saat</SelectItem><SelectItem value="12">12 Saat (AM/PM)</SelectItem></SelectContent>
                     </Select>
@@ -194,7 +194,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-8 items-center border-b pb-6">
                     <Label>Birincil Saat Dilimi</Label>
-                    <Select defaultValue={userData?.timezone || 'Europe/Istanbul'} onValueChange={(v) => updateUserSetting('timezone', v)}>
+                    <Select value={userData?.timezone || 'Europe/Istanbul'} onValueChange={(v) => updateUserSetting('timezone', v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {TIMEZONES.map(tz => <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>)}
@@ -223,7 +223,7 @@ export function SettingsDialogContent({ onClose, user, userData, theme, setTheme
                   </div>
                   <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
                     <Label>Görünüm Seçimi</Label>
-                    <Select defaultValue={userData?.view || "hafta"} onValueChange={(v) => updateUserSetting('view', v)}>
+                    <Select value={userData?.view || "hafta"} onValueChange={(v) => updateUserSetting('view', v)}>
                       <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="gün">{t('day')}</SelectItem>
