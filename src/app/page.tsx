@@ -409,7 +409,7 @@ export default function DashboardPage() {
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-background text-foreground">{t('loading')}</div>;
 
   return (
-    <div className={cn("h-screen w-full flex flex-col bg-background overflow-hidden text-foreground relative", uiMode === 'mobile' ? "mobile-ui" : "pc-ui")}>
+    <div className={cn("h-screen w-full flex flex-col bg-background overflow-hidden text-foreground relative transition-all", uiMode === 'mobile' ? "mobile-ui" : "pc-ui")}>
       
       {/* --- HEADER --- */}
       <header className={cn(
@@ -431,7 +431,7 @@ export default function DashboardPage() {
           {uiMode === 'mobile' && (
             <div className="flex items-center gap-1 ml-2">
               <CalendarIcon className="w-4 h-4 text-primary" />
-              <span className="text-sm font-bold tracking-tight">Takvim</span>
+              <span className="text-xs font-bold tracking-tight">Randevu Hoca</span>
             </div>
           )}
         </div>
@@ -600,10 +600,16 @@ export default function DashboardPage() {
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className={cn(
+          "flex-1 flex flex-col overflow-hidden transition-all",
+          uiMode === 'mobile' ? "px-4 sm:px-12" : "px-0"
+        )}>
           {isClient && (view === 'hafta' || view === 'gün') && (
             <div className="flex shrink-0 border-b bg-background/50 sticky top-0 z-20">
-              <div className="w-[48px] md:w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-1">
+              <div className={cn(
+                "shrink-0 border-r flex flex-col items-center justify-end pb-1",
+                uiMode === 'mobile' ? "w-[40px]" : "w-[48px] md:w-[64px]"
+              )}>
                 <span className="text-[8px] md:text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
                   GMT{isClient ? format(new Date(), 'X') : ''}
                 </span>
@@ -616,20 +622,20 @@ export default function DashboardPage() {
               >
                 {weekDays.map((day, i) => (
                     <div key={i} className={cn(
-                      "flex flex-col items-center justify-center gap-1 transition-all",
-                      uiMode === 'mobile' ? "py-1" : "py-2 md:py-4"
+                      "flex flex-col items-center justify-center transition-all",
+                      uiMode === 'mobile' ? "py-1 gap-0.5" : "py-2 md:py-4 gap-1"
                     )}>
                       <span className={cn(
                         "font-bold uppercase", 
-                        uiMode === 'mobile' ? 'text-[8px] tracking-tight' : 'text-[10px] tracking-widest',
+                        uiMode === 'mobile' ? 'text-[7px] tracking-tight' : 'text-[10px] tracking-widest',
                         isToday(day) ? 'text-primary' : 'text-muted-foreground'
                       )}>{format(day, 'eee', { locale: currentLocale })}</span>
                       <div className={cn(
                         "flex items-center justify-center rounded-full transition-colors", 
-                        uiMode === 'mobile' ? "w-7 h-7" : "w-9 h-9",
+                        uiMode === 'mobile' ? "w-6 h-6" : "w-9 h-9",
                         isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
                       )}>
-                        <span className={cn("font-medium", uiMode === 'mobile' ? "text-sm" : "text-xl")}>{format(day, 'd')}</span>
+                        <span className={cn("font-medium", uiMode === 'mobile' ? "text-xs" : "text-xl")}>{format(day, 'd')}</span>
                       </div>
                     </div>
                 ))}
@@ -666,10 +672,16 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="flex relative h-[1920px]">
-                <div className="w-[48px] md:w-[64px] shrink-0 border-r">
+                <div className={cn(
+                  "shrink-0 border-r",
+                  uiMode === 'mobile' ? "w-[40px]" : "w-[48px] md:w-[64px]"
+                )}>
                   {hours.map((hour, i) => (
                     <div key={i} className="h-[80px] relative">
-                      <span className="absolute -top-[7px] right-1 md:right-2 text-[10px] md:text-[11px] text-muted-foreground font-medium">{format(setMinutes(setHours(new Date(), hour), 0), timeFormatStr, { locale: currentLocale })}</span>
+                      <span className={cn(
+                        "absolute -top-[7px] right-1 font-medium text-muted-foreground",
+                        uiMode === 'mobile' ? "text-[8px]" : "text-[10px] md:text-[11px] md:right-2"
+                      )}>{format(setMinutes(setHours(new Date(), hour), 0), timeFormatStr, { locale: currentLocale })}</span>
                     </div>
                   ))}
                 </div>
@@ -698,7 +710,10 @@ export default function DashboardPage() {
                           const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
                           const height = (differenceInMinutes(end, start) / 60) * 80;
                           return (
-                            <div key={event.id} className={cn("absolute left-0.5 right-0.5 rounded-[4px] px-1 md:px-2 py-0.5 md:py-1 shadow-sm border text-[10px] md:text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden", userData?.dimPastEvents && isBefore(end, new Date()) && "opacity-50")}
+                            <div key={event.id} className={cn("absolute left-0.5 right-0.5 rounded-[4px] px-1 md:px-2 py-0.5 md:py-1 shadow-sm border font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden", 
+                              userData?.dimPastEvents && isBefore(end, new Date()) && "opacity-50",
+                              uiMode === 'mobile' ? "text-[8px]" : "text-[10px] md:text-[11px]"
+                            )}
                               style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color }}
                               onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
                             >
