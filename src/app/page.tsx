@@ -412,29 +412,38 @@ export default function DashboardPage() {
     <div className={cn("h-screen w-full flex flex-col bg-background overflow-hidden text-foreground relative", uiMode === 'mobile' ? "mobile-ui" : "pc-ui")}>
       
       {/* --- HEADER --- */}
-      <header className="h-[64px] border-b flex items-center px-4 justify-between shrink-0 bg-background z-30">
+      <header className={cn(
+        "border-b flex items-center px-4 justify-between shrink-0 bg-background z-30 transition-all",
+        uiMode === 'mobile' ? "h-[48px]" : "h-[64px]"
+      )}>
         <div className="flex items-center gap-2">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-accent rounded-full transition-colors">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 mr-2">
-            <CalendarIcon className="w-5 h-5 text-primary" />
-            <span className="text-lg font-medium hidden sm:inline">Takvim</span>
-          </div>
           
-          <div className="flex items-center gap-1">
+          <div className={cn("flex items-center gap-1", uiMode === 'mobile' && "hidden")}>
             <button onClick={() => navigate('today')} className="px-3 py-1.5 border rounded-md text-sm font-medium hover:bg-accent transition-colors hidden sm:block">{t('today')}</button>
             <button onClick={() => navigate('prev')} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
             <button onClick={() => navigate('next')} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronRight className="w-5 h-5" /></button>
             <h2 className="text-sm md:text-lg font-medium ml-2 capitalize truncate max-w-[120px] md:max-w-none">{headerTitle}</h2>
           </div>
+
+          {uiMode === 'mobile' && (
+            <div className="flex items-center gap-1 ml-2">
+              <CalendarIcon className="w-4 h-4 text-primary" />
+              <span className="text-sm font-bold tracking-tight">Takvim</span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
           <button onClick={() => setIsInfoOpen(true)} className="p-2 hover:bg-accent rounded-full transition-colors"><Sparkles className="w-5 h-5 text-primary" /></button>
           
           <Select value={view} onValueChange={(v: any) => { setView(v); updateUserSetting('view', v); }}>
-            <SelectTrigger className="w-[80px] md:w-[100px] h-9 ml-2 bg-transparent font-medium text-xs md:text-sm">
+            <SelectTrigger className={cn(
+              "h-8 bg-transparent font-medium text-xs md:text-sm",
+              uiMode === 'mobile' ? "w-[70px]" : "w-[80px] md:w-[100px] ml-2"
+            )}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -453,7 +462,7 @@ export default function DashboardPage() {
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-8 w-8 cursor-pointer ml-2 border">
+                <Avatar className="h-8 w-8 cursor-pointer border">
                   <AvatarImage src={user.photoURL || ''} />
                   <AvatarFallback>{user.displayName?.charAt(0) || 'U'}</AvatarFallback>
                 </Avatar>
@@ -483,7 +492,7 @@ export default function DashboardPage() {
         {/* SIDEBAR */}
         <aside className={cn(
           "shrink-0 overflow-y-auto bg-background flex flex-col gap-6 z-40 transition-all duration-300 border-r p-4",
-          (uiMode === 'mobile' || isMobileDevice) ? "fixed inset-y-0 left-0 top-[64px] w-[280px] shadow-2xl" : "w-[280px]",
+          (uiMode === 'mobile' || isMobileDevice) ? "fixed inset-y-0 left-0 top-[48px] w-[280px] shadow-2xl" : "w-[280px]",
           !sidebarOpen && "-translate-x-full absolute",
           sidebarOpen && (uiMode === 'pc' && !isMobileDevice) && "relative translate-x-0"
         )}>
@@ -594,17 +603,33 @@ export default function DashboardPage() {
         <main className="flex-1 flex flex-col overflow-hidden">
           {isClient && (view === 'hafta' || view === 'gün') && (
             <div className="flex shrink-0 border-b bg-background/50 sticky top-0 z-20">
-              <div className="w-[48px] md:w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-2">
-                <span className="text-[9px] md:text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
+              <div className="w-[48px] md:w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-1">
+                <span className="text-[8px] md:text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
                   GMT{isClient ? format(new Date(), 'X') : ''}
                 </span>
               </div>
-              <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
+              <div 
+                className="flex-1 grid" 
+                style={{ 
+                  gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))`,
+                }}
+              >
                 {weekDays.map((day, i) => (
-                    <div key={i} className="flex flex-col items-center justify-center py-2 md:py-4 gap-1">
-                      <span className={cn("text-[10px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
-                      <div className={cn("w-9 h-9 flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}>
-                        <span className="text-xl font-medium">{format(day, 'd')}</span>
+                    <div key={i} className={cn(
+                      "flex flex-col items-center justify-center gap-1 transition-all",
+                      uiMode === 'mobile' ? "py-1" : "py-2 md:py-4"
+                    )}>
+                      <span className={cn(
+                        "font-bold uppercase", 
+                        uiMode === 'mobile' ? 'text-[8px] tracking-tight' : 'text-[10px] tracking-widest',
+                        isToday(day) ? 'text-primary' : 'text-muted-foreground'
+                      )}>{format(day, 'eee', { locale: currentLocale })}</span>
+                      <div className={cn(
+                        "flex items-center justify-center rounded-full transition-colors", 
+                        uiMode === 'mobile' ? "w-7 h-7" : "w-9 h-9",
+                        isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
+                      )}>
+                        <span className={cn("font-medium", uiMode === 'mobile' ? "text-sm" : "text-xl")}>{format(day, 'd')}</span>
                       </div>
                     </div>
                 ))}
@@ -649,7 +674,12 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                <div className="flex-1 relative border-t grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
+                <div 
+                  className="flex-1 relative border-t grid" 
+                  style={{ 
+                    gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))`,
+                  }}
+                >
                   <div className="absolute inset-0 pointer-events-none">
                     {hours.map((_, i) => <div key={i} className="h-[80px] border-b w-full opacity-50"></div>)}
                   </div>
@@ -686,14 +716,12 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {uiMode === 'mobile' && (
-        <button 
-          onClick={() => { setSelectedEvent(null); setIsEventModalOpen(true); }}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-2xl flex items-center justify-center z-50 hover:scale-110 transition-transform active:scale-95"
-        >
-          <Plus className="w-8 h-8" />
-        </button>
-      )}
+      <button 
+        onClick={() => { setSelectedEvent(null); setIsEventModalOpen(true); }}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-2xl flex items-center justify-center z-50 hover:scale-110 transition-transform active:scale-95"
+      >
+        <Plus className="w-8 h-8" />
+      </button>
 
       {/* --- MODALS --- */}
       <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
