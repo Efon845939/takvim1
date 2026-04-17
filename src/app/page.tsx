@@ -44,29 +44,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  Search,
-  HelpCircle,
   X,
   Check,
   QrCode,
-  ArrowLeft,
   Clock,
-  Users,
-  AlignLeft,
-  ChevronDown,
-  ChevronUp,
-  MessageSquare,
   Send,
   Sparkles,
   Search as SearchIcon,
-  Trash2,
-  MinusCircle,
-  CalendarCheck2,
-  Settings2,
-  Palette,
   Monitor,
-  Sun,
-  Moon,
+  Smartphone,
   Info,
   MoreVertical
 } from 'lucide-react';
@@ -101,7 +87,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { QRCodeSVG } from 'qrcode.react';
 import { calendarHelper } from '@/ai/flows/calendar-helper';
-import { Switch } from '@/components/ui/switch';
 import { useTheme } from 'next-themes';
 import { SettingsDialogContent } from '@/components/settings-dialog-content';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -110,8 +95,6 @@ const translations = {
   tr: {
     create: 'Oluştur',
     today: 'Bugün',
-    search: 'Kişi arayın',
-    myCalendars: 'Takvimlerim',
     settings: 'Ayarlar',
     logout: 'Çıkış Yap',
     login: 'Giriş Yap',
@@ -122,28 +105,19 @@ const translations = {
     schedule: 'Plan',
     event: 'Etkinlik',
     task: 'Görev',
-    appointmentSchedule: 'Randevu programı',
-    personal: 'Kişisel',
-    family: 'Aile',
     bookings: 'Randevular',
-    birthdays: 'Doğum Günleri',
-    tasks: 'Görevler',
-    holiday: 'Tatil',
     loading: 'Yükleniyor...',
-    noEvents: 'Planlanmış bir etkinlik bulunmuyor.',
-    save: 'Kaydet',
-    delete: 'Sil',
     qrCode: 'Randevu QR Kodu',
-    copyLink: 'Kopyalandı',
     assistant: 'AI Takvim Asistanı',
     assistantThinking: 'Asistan düşünüyor...',
     askAssistant: 'Nasıl yardımcı olabilirim?...',
+    myCalendars: 'Takvimlerim',
+    personal: 'Kişisel',
+    family: 'Aile'
   },
   en: {
     create: 'Create',
     today: 'Today',
-    search: 'Search people',
-    myCalendars: 'My Calendars',
     settings: 'Settings',
     logout: 'Sign Out',
     login: 'Sign In',
@@ -154,22 +128,15 @@ const translations = {
     schedule: 'Agenda',
     event: 'Event',
     task: 'Task',
-    appointmentSchedule: 'Appointment schedule',
-    personal: 'Personal',
-    family: 'Family',
     bookings: 'Bookings',
-    birthdays: 'Birthdays',
-    tasks: 'Tasks',
-    holiday: 'Holiday',
     loading: 'Loading...',
-    noEvents: 'No events scheduled.',
-    save: 'Save',
-    delete: 'Delete',
     qrCode: 'Appointment QR Code',
-    copyLink: 'Copied',
     assistant: 'AI Calendar Assistant',
     assistantThinking: 'Assistant is thinking...',
     askAssistant: 'How can I help you?...',
+    myCalendars: 'My Calendars',
+    personal: 'Personal',
+    family: 'Family'
   }
 };
 
@@ -179,13 +146,15 @@ export default function DashboardPage() {
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
+  const isMobileDevice = useIsMobile();
 
   // --- STATE ---
   const [currentDate, setCurrentDate] = useState(new Date());
   const [miniCalendarMonth, setMiniCalendarMonth] = useState(new Date());
   const [view, setView] = useState<'gün' | 'hafta' | 'ay' | 'plan'>('hafta');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+  const [uiMode, setUiMode] = useState<'pc' | 'mobile'>('pc'); // Manual UI Override
   
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -194,12 +163,11 @@ export default function DashboardPage() {
   
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [isClient, setIsClient] = useState(false);
+  
   const gridScrollRef = useRef<HTMLDivElement>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   
   // Event Form
-  const [activeEventTab, setActiveTab] = useState('Etkinlik');
   const [eventForm, setEventForm] = useState({
     title: '',
     description: '',
@@ -214,11 +182,7 @@ export default function DashboardPage() {
     booking: true,
     holiday: true,
     family: true,
-    birthdays: true,
-    tasks: true,
   });
-
-  const [holidays, setHolidays] = useState<any[]>([]);
 
   // AI Helper State
   const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
@@ -241,16 +205,29 @@ export default function DashboardPage() {
   
   const { data: userData } = useDoc(userDocRef);
 
-  // --- HYDRATION FIX & MOBILE VIEW ---
+  // --- INITIALIZATION ---
   useEffect(() => {
     setIsClient(true);
-    if (isMobile) {
-      setView('gün');
+    const savedUiMode = localStorage.getItem('uiMode') as 'pc' | 'mobile';
+    if (savedUiMode) {
+      setUiMode(savedUiMode);
+    } else if (isMobileDevice) {
+      setUiMode('mobile');
+    }
+
+    if (isMobileDevice) {
       setSidebarOpen(false);
     }
+    
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
-  }, [isMobile]);
+  }, [isMobileDevice]);
+
+  useEffect(() => {
+    if (userData?.view) {
+      setView(userData.view);
+    }
+  }, [userData]);
 
   // AUTO SCROLL CHAT
   useEffect(() => {
@@ -269,19 +246,21 @@ export default function DashboardPage() {
 
   const combinedEvents = React.useMemo(() => {
     const userEvents = eventsData || [];
-    const typedEvents = userEvents.filter(e => filters[e.type as keyof typeof filters] !== false);
-    return [...typedEvents].sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime());
+    const filtered = userEvents.filter(e => filters[e.type as keyof typeof filters] !== false);
+    return [...filtered].sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime());
   }, [eventsData, filters]);
 
+  const effectiveView = uiMode === 'mobile' ? 'gün' : view;
+
   const weekDays = React.useMemo(() => {
-    if (view === 'gün') return [currentDate];
+    if (effectiveView === 'gün') return [currentDate];
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     let days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
     if (userData?.showWeekends === false) {
       days = days.filter(d => getDay(d) !== 0 && getDay(d) !== 6);
     }
     return days;
-  }, [currentDate, userData?.showWeekends, view]);
+  }, [currentDate, userData?.showWeekends, effectiveView]);
 
   const monthDays = React.useMemo(() => {
     const start = startOfMonth(currentDate);
@@ -300,11 +279,17 @@ export default function DashboardPage() {
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   // --- ACTIONS ---
+  const toggleUiMode = () => {
+    const newMode = uiMode === 'pc' ? 'mobile' : 'pc';
+    setUiMode(newMode);
+    localStorage.setItem('uiMode', newMode);
+    if (newMode === 'mobile') setSidebarOpen(false);
+  };
+
   const handleDateSelect = (date: Date, hour: number) => {
     const start = setMinutes(setHours(date, hour), 0);
     const end = setMinutes(setHours(date, hour + 1), 0);
     setSelectedEvent(null);
-    setActiveTab('Etkinlik');
     setEventForm({
       title: '',
       description: '',
@@ -318,7 +303,6 @@ export default function DashboardPage() {
 
   const handleEventClick = (event: any) => {
     setSelectedEvent(event);
-    setActiveTab('Etkinlik');
     setEventForm({
       title: event.title,
       description: event.description || '',
@@ -335,14 +319,14 @@ export default function DashboardPage() {
     try {
       const start = new Date(eventForm.start).toISOString();
       const end = new Date(eventForm.end).toISOString();
-      const eventData = { ...eventForm, start, end, userId: user.uid, updatedAt: serverTimestamp() };
+      const data = { ...eventForm, start, end, userId: user.uid, updatedAt: serverTimestamp() };
       if (selectedEvent) {
-        await updateDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id), eventData);
+        await updateDoc(doc(db, 'users', user.uid, 'events', selectedEvent.id), data);
       } else {
-        await addDoc(collection(db, 'users', user.uid, 'events'), { ...eventData, createdAt: serverTimestamp() });
+        await addDoc(collection(db, 'users', user.uid, 'events'), { ...data, createdAt: serverTimestamp() });
       }
-      toast({ title: selectedEvent ? 'Updated' : 'Created' });
       setIsEventModalOpen(false);
+      toast({ title: t('create') });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error' });
     }
@@ -359,7 +343,7 @@ export default function DashboardPage() {
       const response = await calendarHelper({ 
         message: msg, 
         history: newHistory,
-        userContext: `User: ${user?.displayName}, View: ${view}, Date: ${format(currentDate, 'yyyy-MM-dd')}` 
+        userContext: `User: ${user?.displayName}, View: ${effectiveView}, Date: ${format(currentDate, 'yyyy-MM-dd')}` 
       });
       
       const reply = response.reply;
@@ -376,7 +360,7 @@ export default function DashboardPage() {
         }
       }, 20);
     } catch (error) {
-      setAiMessages(prev => [...prev, { role: 'ai', text: 'Üzgünüm, şu an yardımcı olamıyorum.' }]);
+      setAiMessages(prev => [...prev, { role: 'ai', text: 'Hata oluştu.' }]);
     } finally {
       setIsAiLoading(false);
     }
@@ -389,54 +373,57 @@ export default function DashboardPage() {
       setMiniCalendarMonth(today);
       return;
     }
-    if (view === 'ay') {
+    if (effectiveView === 'ay') {
       const nextMonth = dir === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1);
       setCurrentDate(nextMonth);
       setMiniCalendarMonth(nextMonth);
     } else {
-      const amount = view === 'gün' ? 1 : 7;
+      const amount = effectiveView === 'gün' ? 1 : 7;
       const fn = dir === 'next' ? addDaysFn : subDaysFn;
       setCurrentDate(prev => fn(prev, amount));
     }
   };
 
   const headerTitle = React.useMemo(() => {
-    if (view === 'ay') return format(currentDate, 'MMMM yyyy', { locale: currentLocale });
-    if (view === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: currentLocale });
+    if (effectiveView === 'ay') return format(currentDate, 'MMMM yyyy', { locale: currentLocale });
+    if (effectiveView === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: currentLocale });
     return `${format(weekDays[0], 'd')} – ${format(weekDays[weekDays.length - 1], 'd MMMM yyyy', { locale: currentLocale })}`;
-  }, [currentDate, weekDays, view, currentLocale]);
+  }, [currentDate, weekDays, effectiveView, currentLocale]);
 
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-background text-foreground">{t('loading')}</div>;
 
   return (
-    <div className="h-screen w-full flex flex-col bg-background overflow-hidden text-foreground select-none relative">
+    <div className={cn("h-screen w-full flex flex-col bg-background overflow-hidden text-foreground relative", uiMode === 'mobile' ? "mobile-ui" : "pc-ui")}>
       
       {/* --- HEADER --- */}
-      <header className="h-[64px] border-b flex items-center px-2 md:px-4 justify-between shrink-0 bg-background z-30">
-        <div className="flex items-center gap-2 md:gap-4">
+      <header className="h-[64px] border-b flex items-center px-4 justify-between shrink-0 bg-background z-30">
+        <div className="flex items-center gap-2">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-accent rounded-full transition-colors">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-            <span className="text-lg md:text-xl font-medium tracking-tight hidden sm:inline">Calendar</span>
+          <div className="flex items-center gap-2 mr-2">
+            <CalendarIcon className="w-5 h-5 text-primary" />
+            <span className="text-lg font-medium hidden sm:inline">Calendar</span>
           </div>
           
-          <div className="flex items-center gap-1 md:gap-2">
-            <button onClick={() => navigate('today')} className="px-2 md:px-4 py-1.5 border rounded-md text-xs md:text-sm font-medium hover:bg-accent transition-colors ml-1 md:ml-4">{t('today')}</button>
-            <div className="flex items-center">
-              <button onClick={() => navigate('prev')} className="p-1.5 md:p-2 hover:bg-accent rounded-full transition-colors"><ChevronLeft className="w-4 h-4 md:w-5 md:h-5" /></button>
-              <button onClick={() => navigate('next')} className="p-1.5 md:p-2 hover:bg-accent rounded-full transition-colors"><ChevronRight className="w-4 h-4 md:w-5 md:h-5" /></button>
-            </div>
-            <h2 className="text-[14px] md:text-[20px] font-normal ml-2 md:ml-4 min-w-[120px] md:min-w-[200px] capitalize truncate max-w-[150px] md:max-w-none">{headerTitle}</h2>
+          <div className="flex items-center gap-1">
+            <button onClick={() => navigate('today')} className="px-3 py-1.5 border rounded-md text-sm font-medium hover:bg-accent transition-colors hidden sm:block">{t('today')}</button>
+            <button onClick={() => navigate('prev')} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
+            <button onClick={() => navigate('next')} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronRight className="w-5 h-5" /></button>
+            <h2 className="text-sm md:text-lg font-medium ml-2 capitalize truncate max-w-[120px] md:max-w-none">{headerTitle}</h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 md:gap-2">
+        <div className="flex items-center gap-2">
+          {/* UI MODE TOGGLE */}
+          <button onClick={toggleUiMode} className="p-2 hover:bg-accent rounded-full transition-colors" title="Toggle UI Mode">
+            {uiMode === 'pc' ? <Smartphone className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
+          </button>
+
           <button onClick={() => setIsInfoOpen(true)} className="p-2 hover:bg-accent rounded-full transition-colors"><Sparkles className="w-5 h-5 text-primary" /></button>
           
-          {!isMobile && (
-            <Select value={view} onValueChange={(v: any) => setView(v)}>
+          {uiMode === 'pc' && (
+            <Select value={view} onValueChange={(v: any) => { setView(v); updateUserSetting('view', v); }}>
               <SelectTrigger className="w-[100px] h-9 ml-2 bg-transparent font-medium text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -450,14 +437,14 @@ export default function DashboardPage() {
           )}
 
           {!user ? (
-            <div className="flex items-center gap-2 ml-2 md:ml-4">
-              <Button variant="ghost" size="sm" asChild className="text-xs md:text-sm font-medium hidden sm:flex"><Link href="/login">{t('login')}</Link></Button>
-              <Button size="sm" asChild className="text-xs md:text-sm font-medium"><Link href="/register">{t('register')}</Link></Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" asChild className="hidden sm:flex"><Link href="/login">{t('login')}</Link></Button>
+              <Button size="sm" asChild><Link href="/register">{t('register')}</Link></Button>
             </div>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-8 w-8 md:h-9 md:w-9 cursor-pointer ml-2 md:ml-4 border">
+                <Avatar className="h-8 w-8 cursor-pointer ml-2 border">
                   <AvatarImage src={user.photoURL || ''} />
                   <AvatarFallback>{user.displayName?.charAt(0) || 'U'}</AvatarFallback>
                 </Avatar>
@@ -484,34 +471,24 @@ export default function DashboardPage() {
 
       {/* --- MAIN CONTENT --- */}
       <div className="flex flex-1 overflow-hidden relative">
-        {/* SIDEBAR OVERLAY FOR MOBILE */}
-        {isMobile && sidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black/50 z-40 transition-opacity" 
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
+        {/* SIDEBAR */}
         <aside className={cn(
-          "shrink-0 overflow-y-auto bg-background flex flex-col gap-6 z-50 transition-all duration-300",
-          isMobile ? "fixed top-[64px] bottom-0 left-0 w-[280px] p-4 border-r shadow-2xl" : "w-[280px] border-r p-4",
-          isMobile && !sidebarOpen && "-translate-x-full",
-          !isMobile && !sidebarOpen && "hidden"
+          "shrink-0 overflow-y-auto bg-background flex flex-col gap-6 z-40 transition-all duration-300 border-r p-4",
+          (uiMode === 'mobile' || isMobileDevice) ? "fixed inset-y-0 left-0 top-[64px] w-[280px] shadow-2xl" : "w-[280px]",
+          !sidebarOpen && "-translate-x-full absolute",
+          sidebarOpen && (uiMode === 'pc' && !isMobileDevice) && "relative translate-x-0"
         )}>
-          {!isMobile && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 bg-card border shadow-sm px-4 py-3 rounded-full hover:bg-accent transition-all font-medium text-[14px] w-full">
-                  <Plus className="w-6 h-6 text-primary" />
-                  <span>{t('create')}</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56">
-                <DropdownMenuItem onClick={() => { setSelectedEvent(null); setActiveTab('Etkinlik'); setIsEventModalOpen(true); }} className="cursor-pointer"><Plus className="w-4 h-4 mr-2" /> {t('event')}</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setSelectedEvent(null); setActiveTab('Görev'); setIsEventModalOpen(true); }} className="cursor-pointer"><Check className="w-4 h-4 mr-2" /> {t('task')}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-3 bg-card border shadow-sm px-4 py-3 rounded-full hover:bg-accent transition-all font-medium text-[14px] w-full">
+                <Plus className="w-6 h-6 text-primary" />
+                <span>{t('create')}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56">
+              <DropdownMenuItem onClick={() => { setSelectedEvent(null); setIsEventModalOpen(true); }} className="cursor-pointer"><Plus className="w-4 h-4 mr-2" /> {t('event')}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {userData?.worldClockEnabled && (
             <div className="px-1 border-b pb-4">
@@ -551,14 +528,12 @@ export default function DashboardPage() {
             </div>
             <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
               {miniCalendarDays.map((day, i) => {
-                const isCurMonth = isSameMonth(day, miniCalendarMonth);
-                const isDayToday = isToday(day);
                 const isDaySelected = isSameDay(day, currentDate);
                 return (
-                  <div key={i} onClick={() => { setCurrentDate(day); setMiniCalendarMonth(day); if(isMobile) setSidebarOpen(false); }}
+                  <div key={i} onClick={() => { setCurrentDate(day); setMiniCalendarMonth(day); if(isMobileDevice) setSidebarOpen(false); }}
                     className={cn("h-8 w-8 flex items-center justify-center rounded-full cursor-pointer transition-all m-auto text-[12px]",
-                      !isCurMonth && "text-muted-foreground/50",
-                      isDayToday && !isDaySelected && "text-primary font-bold",
+                      !isSameMonth(day, miniCalendarMonth) && "text-muted-foreground/50",
+                      isToday(day) && !isDaySelected && "text-primary font-bold",
                       isDaySelected && "bg-primary text-primary-foreground font-bold"
                     )}
                   >
@@ -589,19 +564,19 @@ export default function DashboardPage() {
         </aside>
 
         <main className="flex-1 flex flex-col overflow-hidden">
-          {isClient && (view === 'hafta' || view === 'gün') && (
-            <div className="flex pr-[15px] shrink-0 border-b bg-background/50 sticky top-0 z-20">
+          {isClient && (effectiveView === 'hafta' || effectiveView === 'gün') && (
+            <div className="flex shrink-0 border-b bg-background/50 sticky top-0 z-20">
               <div className="w-[48px] md:w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-2">
                 <span className="text-[9px] md:text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
                   GMT{isClient ? format(new Date(), 'X') : ''}
                 </span>
               </div>
-              <div className={cn("flex-1 grid", view === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
+              <div className={cn("flex-1 grid", effectiveView === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
                 {weekDays.map((day, i) => (
-                    <div key={i} className="flex flex-col items-center justify-center py-2 md:py-4 gap-0.5 md:gap-1">
-                      <span className={cn("text-[9px] md:text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
-                      <div className={cn("w-8 h-8 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}>
-                        <span className="text-lg md:text-2xl font-medium">{format(day, 'd')}</span>
+                    <div key={i} className="flex flex-col items-center justify-center py-2 md:py-4 gap-1">
+                      <span className={cn("text-[10px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
+                      <div className={cn("w-9 h-9 flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}>
+                        <span className="text-xl font-medium">{format(day, 'd')}</span>
                       </div>
                     </div>
                 ))}
@@ -610,25 +585,25 @@ export default function DashboardPage() {
           )}
 
           <div className="flex-1 overflow-y-auto relative" ref={gridScrollRef}>
-            {view === 'ay' ? (
+            {effectiveView === 'ay' ? (
               <div className="flex flex-col h-full min-h-[500px]">
                 <div className="grid grid-cols-7 border-b border-l bg-background sticky top-0 z-10">
                   {['Pt', 'Sl', 'Çr', 'Pr', 'Cm', 'Ct', 'Pz'].map(d => (
-                    <div key={d} className="py-1 md:py-2 text-center text-[10px] md:text-[11px] font-bold text-muted-foreground border-r uppercase">{d}</div>
+                    <div key={d} className="py-2 text-center text-[11px] font-bold text-muted-foreground border-r uppercase">{d}</div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 flex-1 border-l">
                   {monthDays.map((day, i) => {
                     const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day));
                     return (
-                      <div key={i} className={cn("border-r border-b p-1 md:p-2 flex flex-col items-end min-h-[80px] md:min-h-[120px]", !isSameMonth(day, currentDate) && "opacity-30")} onClick={() => handleDateSelect(day, 9)}>
-                        <div className={cn("text-[10px] md:text-xs font-semibold mb-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full", isToday(day) ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{format(day, 'd')}</div>
-                        <div className="w-full space-y-0.5 md:space-y-1 overflow-hidden">
-                          {dayEvents.slice(0, isMobile ? 2 : 3).map((event: any) => (
-                            <div key={event.id} className="text-[9px] md:text-[10px] px-1 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>{event.title}</div>
+                      <div key={i} className={cn("border-r border-b p-2 flex flex-col items-end min-h-[100px]", !isSameMonth(day, currentDate) && "opacity-30")} onClick={() => handleDateSelect(day, 9)}>
+                        <div className={cn("text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full", isToday(day) ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{format(day, 'd')}</div>
+                        <div className="w-full space-y-1 overflow-hidden">
+                          {dayEvents.slice(0, 3).map((event: any) => (
+                            <div key={event.id} className="text-[10px] px-1 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>{event.title}</div>
                           ))}
-                          {dayEvents.length > (isMobile ? 2 : 3) && (
-                            <div className="text-[9px] text-muted-foreground pl-1">+{dayEvents.length - (isMobile ? 2 : 3)}</div>
+                          {dayEvents.length > 3 && (
+                            <div className="text-[10px] text-muted-foreground pl-1">+{dayEvents.length - 3}</div>
                           )}
                         </div>
                       </div>
@@ -665,7 +640,7 @@ export default function DashboardPage() {
                           const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
                           const height = (differenceInMinutes(end, start) / 60) * 80;
                           return (
-                            <div key={event.id} className={cn("absolute left-0.5 right-0.5 rounded-[4px] px-1 md:px-2 py-0.5 md:py-1 shadow-sm border text-[9px] md:text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden")}
+                            <div key={event.id} className={cn("absolute left-0.5 right-0.5 rounded-[4px] px-1 md:px-2 py-0.5 md:py-1 shadow-sm border text-[10px] md:text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden", userData?.dimPastEvents && isBefore(end, new Date()) && "opacity-50")}
                               style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color }}
                               onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
                             >
@@ -684,9 +659,9 @@ export default function DashboardPage() {
       </div>
 
       {/* MOBILE FAB */}
-      {isMobile && (
+      {uiMode === 'mobile' && (
         <button 
-          onClick={() => { setSelectedEvent(null); setActiveTab('Etkinlik'); setIsEventModalOpen(true); }}
+          onClick={() => { setSelectedEvent(null); setIsEventModalOpen(true); }}
           className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-2xl flex items-center justify-center z-50 hover:scale-110 transition-transform active:scale-95"
         >
           <Plus className="w-8 h-8" />
@@ -745,7 +720,7 @@ export default function DashboardPage() {
       </Dialog>
 
       <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
-        <DialogContent className="sm:max-w-[500px] h-[80vh] sm:h-[600px] p-0 flex flex-col overflow-hidden">
+        <DialogContent className="sm:max-w-[500px] h-[80vh] p-0 flex flex-col overflow-hidden">
           <VisuallyHidden><DialogTitle>{t('assistant')}</DialogTitle></VisuallyHidden>
           <div className="p-4 border-b bg-accent/50 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -789,11 +764,17 @@ export default function DashboardPage() {
             <div className="p-4 bg-white rounded-2xl shadow-xl">
               {isClient && <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={200} level="H" />}
             </div>
-            <p className="text-xs text-muted-foreground text-center">Öğrencileriniz bu kodu taratarak randevu alabilir.</p>
           </div>
         </DialogContent>
       </Dialog>
 
     </div>
   );
+
+  async function updateUserSetting(field: string, value: any) {
+    if (!user?.uid) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { [field]: value, updatedAt: serverTimestamp() });
+    } catch (e) { console.error(e); }
+  }
 }
