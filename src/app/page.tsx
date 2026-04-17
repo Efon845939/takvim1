@@ -210,7 +210,8 @@ export default function DashboardPage() {
   // --- INITIALIZATION ---
   useEffect(() => {
     setIsClient(true);
-    const savedUiMode = localStorage.getItem('uiMode') as 'pc' | 'mobile';
+    // localStorage check to persist uiMode choice
+    const savedUiMode = typeof window !== 'undefined' ? localStorage.getItem('uiMode') as 'pc' | 'mobile' : null;
     if (savedUiMode) {
       setUiMode(savedUiMode);
     } else if (isMobileDevice) {
@@ -288,7 +289,9 @@ export default function DashboardPage() {
   const toggleUiMode = () => {
     const newMode = uiMode === 'pc' ? 'mobile' : 'pc';
     setUiMode(newMode);
-    localStorage.setItem('uiMode', newMode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('uiMode', newMode);
+    }
     if (newMode === 'mobile') setSidebarOpen(false);
   };
 
@@ -395,6 +398,8 @@ export default function DashboardPage() {
     if (view === 'gün') return format(currentDate, 'd MMMM yyyy', { locale: currentLocale });
     return `${format(weekDays[0], 'd')} – ${format(weekDays[weekDays.length - 1], 'd MMMM yyyy', { locale: currentLocale })}`;
   }, [currentDate, weekDays, view, currentLocale]);
+
+  const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-background text-foreground">{t('loading')}</div>;
 
@@ -781,7 +786,7 @@ export default function DashboardPage() {
           <DialogHeader><DialogTitle>{t('qrCode')}</DialogTitle></DialogHeader>
           <div className="flex flex-col items-center gap-6 py-6">
             <div className="p-4 bg-white rounded-2xl shadow-xl">
-              {isClient && <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={200} level="H" />}
+              {isClient && <QRCodeSVG value={`${originUrl}/book/${user?.uid}/default`} size={200} level="H" />}
             </div>
           </div>
         </DialogContent>
