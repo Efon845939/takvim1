@@ -67,7 +67,8 @@ import {
   Monitor,
   Sun,
   Moon,
-  Info
+  Info,
+  MoreVertical
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -101,19 +102,9 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { QRCodeSVG } from 'qrcode.react';
 import { calendarHelper } from '@/ai/flows/calendar-helper';
 import { Switch } from '@/components/ui/switch';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useTheme } from 'next-themes';
 import { SettingsDialogContent } from '@/components/settings-dialog-content';
-
-const COUNTRY_LIST = [
-  { code: 'TR', name: 'Türkiye' },
-  { code: 'US', name: 'USA' },
-  { code: 'GB', name: 'United Kingdom' },
-  { code: 'DE', name: 'Germany' },
-  { code: 'FR', name: 'France' },
-  { code: 'ES', name: 'Spain' },
-  { code: 'IT', name: 'Italy' }
-];
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const translations = {
   tr: {
@@ -121,7 +112,6 @@ const translations = {
     today: 'Bugün',
     search: 'Kişi arayın',
     myCalendars: 'Takvimlerim',
-    otherCalendars: 'Diğer Takvimler',
     settings: 'Ayarlar',
     logout: 'Çıkış Yap',
     login: 'Giriş Yap',
@@ -143,21 +133,17 @@ const translations = {
     noEvents: 'Planlanmış bir etkinlik bulunmuyor.',
     save: 'Kaydet',
     delete: 'Sil',
-    title: 'Başlık ekle',
-    description: 'Açıklama ekle',
     qrCode: 'Randevu QR Kodu',
     copyLink: 'Kopyalandı',
     assistant: 'AI Takvim Asistanı',
     assistantThinking: 'Asistan düşünüyor...',
-    askAssistant: 'Takvimi nasıl kullanırım?...',
-    countryHoliday: 'Ülke Takvimi Ekle'
+    askAssistant: 'Nasıl yardımcı olabilirim?...',
   },
   en: {
     create: 'Create',
     today: 'Today',
     search: 'Search people',
     myCalendars: 'My Calendars',
-    otherCalendars: 'Other Calendars',
     settings: 'Settings',
     logout: 'Sign Out',
     login: 'Sign In',
@@ -179,14 +165,11 @@ const translations = {
     noEvents: 'No events scheduled.',
     save: 'Save',
     delete: 'Delete',
-    title: 'Add title',
-    description: 'Add description',
     qrCode: 'Appointment QR Code',
     copyLink: 'Copied',
     assistant: 'AI Calendar Assistant',
     assistantThinking: 'Assistant is thinking...',
-    askAssistant: 'How do I use the calendar?...',
-    countryHoliday: 'Add Country Holiday'
+    askAssistant: 'How can I help you?...',
   }
 };
 
@@ -196,6 +179,7 @@ export default function DashboardPage() {
   const auth = useAuth();
   const { theme, setTheme } = useTheme();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // --- STATE ---
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -207,8 +191,6 @@ export default function DashboardPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -225,10 +207,6 @@ export default function DashboardPage() {
     end: format(new Date(), "yyyy-MM-dd'T'10:00"),
     type: 'personal',
     color: '#3b82f6',
-    guests: '',
-    location: '',
-    reminder: '30',
-    visibility: 'default'
   });
 
   const [filters, setFilters] = useState({
@@ -241,7 +219,6 @@ export default function DashboardPage() {
   });
 
   const [holidays, setHolidays] = useState<any[]>([]);
-  const [selectedCountries, setSelectedCountries] = useState(['TR']);
 
   // AI Helper State
   const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'ai'; text: string }[]>([]);
@@ -264,12 +241,16 @@ export default function DashboardPage() {
   
   const { data: userData } = useDoc(userDocRef);
 
-  // --- HYDRATION FIX & REFRESH ---
+  // --- HYDRATION FIX & MOBILE VIEW ---
   useEffect(() => {
     setIsClient(true);
+    if (isMobile) {
+      setView('gün');
+      setSidebarOpen(false);
+    }
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isMobile]);
 
   // AUTO SCROLL CHAT
   useEffect(() => {
@@ -278,68 +259,27 @@ export default function DashboardPage() {
     }
   }, [aiMessages, currentlyTyping]);
 
-  // SYNC PERSISTED SETTINGS
-  useEffect(() => {
-    if (userData) {
-      if (userData.selectedCountries) setSelectedCountries(userData.selectedCountries);
-      if (userData.theme) setTheme(userData.theme);
-    }
-  }, [userData, setTheme]);
-
   // LOCALIZATION HELPERS
   const lang = userData?.language === 'en' ? 'en' : 'tr';
   const t = (key: keyof typeof translations['tr']) => translations[lang][key] || key;
   const currentLocale = lang === 'en' ? enUS : tr;
   const timeFormatStr = userData?.timeFormat === '12' ? 'hh:mm a' : 'HH:mm';
 
-  // --- FETCH HOLIDAYS ---
-  useEffect(() => {
-    const fetchHolidays = async () => {
-      try {
-        const year = currentDate.getFullYear();
-        let allHolidays: any[] = [];
-        for (const code of selectedCountries) {
-          const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${code}`);
-          if (response.ok) {
-            const data = await response.json();
-            allHolidays = [...allHolidays, ...data.map((h: any, idx: number) => ({
-              id: `holiday-${code}-${h.date}-${h.name || h.localName}-${idx}`,
-              title: `${h.localName} (${code})`,
-              start: h.date,
-              end: h.date,
-              type: 'holiday',
-              color: '#10b981',
-              country: code
-            }))];
-          }
-        }
-        setHolidays(allHolidays);
-      } catch (error) {
-        console.error('Holidays API failed:', error);
-      }
-    };
-    fetchHolidays();
-  }, [currentDate, selectedCountries]);
-
   const isTeacher = ["proturkgamerefe@gmail.com", "sintiya.ugur@bahcesehir.k12.tr"].includes(user?.email || "");
 
   const combinedEvents = React.useMemo(() => {
     const userEvents = eventsData || [];
-    const holidayEvents = filters.holiday ? holidays : [];
     const typedEvents = userEvents.filter(e => filters[e.type as keyof typeof filters] !== false);
-    return [...typedEvents, ...holidayEvents].sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime());
-  }, [eventsData, holidays, filters]);
+    return [...typedEvents].sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime());
+  }, [eventsData, filters]);
 
   const weekDays = React.useMemo(() => {
     if (view === 'gün') return [currentDate];
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     let days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-    
-    // Görünüm Ayarı: Hafta sonlarını göster
     if (userData?.showWeekends === false) {
       days = days.filter(d => getDay(d) !== 0 && getDay(d) !== 6);
     }
-    
     return days;
   }, [currentDate, userData?.showWeekends, view]);
 
@@ -372,16 +312,11 @@ export default function DashboardPage() {
       end: format(end, "yyyy-MM-dd'T'HH:mm"),
       type: 'personal',
       color: '#3b82f6',
-      guests: '',
-      location: '',
-      reminder: '30',
-      visibility: 'default'
     });
     setIsEventModalOpen(true);
   };
 
   const handleEventClick = (event: any) => {
-    if (event.type === 'holiday') return;
     setSelectedEvent(event);
     setActiveTab('Etkinlik');
     setEventForm({
@@ -391,10 +326,6 @@ export default function DashboardPage() {
       end: format(parseISO(event.end), "yyyy-MM-dd'T'HH:mm"),
       type: event.type,
       color: event.color,
-      guests: event.guests || '',
-      location: event.location || '',
-      reminder: event.reminder || '30',
-      visibility: event.visibility || 'default'
     });
     setIsEventModalOpen(true);
   };
@@ -425,14 +356,12 @@ export default function DashboardPage() {
     setAiMessages(newHistory);
     setIsAiLoading(true);
     try {
-      // Hafıza: Tüm history'yi gönderiyoruz
       const response = await calendarHelper({ 
         message: msg, 
         history: newHistory,
-        userContext: `Kullanıcı: ${user?.displayName}, Görünüm: ${view}, Tarih: ${format(currentDate, 'yyyy-MM-dd')}` 
+        userContext: `User: ${user?.displayName}, View: ${view}, Date: ${format(currentDate, 'yyyy-MM-dd')}` 
       });
       
-      // Harf harf yazma efekti
       const reply = response.reply;
       let currentIdx = 0;
       setCurrentlyTyping("");
@@ -446,7 +375,6 @@ export default function DashboardPage() {
           setCurrentlyTyping("");
         }
       }, 20);
-
     } catch (error) {
       setAiMessages(prev => [...prev, { role: 'ai', text: 'Üzgünüm, şu an yardımcı olamıyorum.' }]);
     } finally {
@@ -481,55 +409,55 @@ export default function DashboardPage() {
   if (isUserLoading) return <div className="h-screen flex items-center justify-center bg-background text-foreground">{t('loading')}</div>;
 
   return (
-    <div className="h-screen w-full flex flex-col bg-background overflow-hidden text-foreground select-none">
+    <div className="h-screen w-full flex flex-col bg-background overflow-hidden text-foreground select-none relative">
       
       {/* --- HEADER --- */}
-      <header className="h-[64px] border-b flex items-center px-4 justify-between shrink-0 bg-background z-30">
-        <div className="flex items-center gap-4">
+      <header className="h-[64px] border-b flex items-center px-2 md:px-4 justify-between shrink-0 bg-background z-30">
+        <div className="flex items-center gap-2 md:gap-4">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-accent rounded-full transition-colors">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 mr-4">
-            <CalendarIcon className="w-6 h-6 text-primary" />
-            <span className="text-xl font-medium tracking-tight">Calendar</span>
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+            <span className="text-lg md:text-xl font-medium tracking-tight hidden sm:inline">Calendar</span>
           </div>
           
-          <div className="flex items-center gap-2">
-            <button onClick={() => navigate('today')} className="px-4 py-2 border rounded-md text-sm font-medium hover:bg-accent transition-colors ml-4">{t('today')}</button>
-            <div className="flex items-center gap-0.5 ml-2">
-              <button onClick={() => navigate('prev')} className="p-2 hover:bg-accent rounded-full transition-colors"><ChevronLeft className="w-5 h-5" /></button>
-              <button onClick={() => navigate('next')} className="p-2 hover:bg-accent rounded-full transition-colors"><ChevronRight className="w-5 h-5" /></button>
+          <div className="flex items-center gap-1 md:gap-2">
+            <button onClick={() => navigate('today')} className="px-2 md:px-4 py-1.5 border rounded-md text-xs md:text-sm font-medium hover:bg-accent transition-colors ml-1 md:ml-4">{t('today')}</button>
+            <div className="flex items-center">
+              <button onClick={() => navigate('prev')} className="p-1.5 md:p-2 hover:bg-accent rounded-full transition-colors"><ChevronLeft className="w-4 h-4 md:w-5 md:h-5" /></button>
+              <button onClick={() => navigate('next')} className="p-1.5 md:p-2 hover:bg-accent rounded-full transition-colors"><ChevronRight className="w-4 h-4 md:w-5 md:h-5" /></button>
             </div>
-            <h2 className="text-[20px] font-normal ml-4 min-w-[200px] capitalize">{headerTitle}</h2>
+            <h2 className="text-[14px] md:text-[20px] font-normal ml-2 md:ml-4 min-w-[120px] md:min-w-[200px] capitalize truncate max-w-[150px] md:max-w-none">{headerTitle}</h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button onClick={() => setIsSearchOpen(true)} className="p-2 hover:bg-accent rounded-full transition-colors"><Search className="w-5 h-5" /></button>
-          <button onClick={() => setIsInfoOpen(true)} className="p-2 hover:bg-accent rounded-full transition-colors"><HelpCircle className="w-5 h-5" /></button>
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-accent rounded-full transition-colors"><Settings className="w-5 h-5" /></button>
+        <div className="flex items-center gap-1 md:gap-2">
+          <button onClick={() => setIsInfoOpen(true)} className="p-2 hover:bg-accent rounded-full transition-colors"><Sparkles className="w-5 h-5 text-primary" /></button>
           
-          <Select value={view} onValueChange={(v: any) => setView(v)}>
-            <SelectTrigger className="w-[100px] h-9 ml-2 bg-transparent font-medium text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="gün">{t('day')}</SelectItem>
-              <SelectItem value="hafta">{t('week')}</SelectItem>
-              <SelectItem value="ay">{t('month')}</SelectItem>
-              <SelectItem value="plan">{t('schedule')}</SelectItem>
-            </SelectContent>
-          </Select>
+          {!isMobile && (
+            <Select value={view} onValueChange={(v: any) => setView(v)}>
+              <SelectTrigger className="w-[100px] h-9 ml-2 bg-transparent font-medium text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gün">{t('day')}</SelectItem>
+                <SelectItem value="hafta">{t('week')}</SelectItem>
+                <SelectItem value="ay">{t('month')}</SelectItem>
+                <SelectItem value="plan">{t('schedule')}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
 
           {!user ? (
-            <div className="flex items-center gap-2 ml-4">
-              <Button variant="ghost" size="sm" asChild className="text-sm font-medium"><Link href="/login">{t('login')}</Link></Button>
-              <Button size="sm" asChild className="text-sm font-medium"><Link href="/register">{t('register')}</Link></Button>
+            <div className="flex items-center gap-2 ml-2 md:ml-4">
+              <Button variant="ghost" size="sm" asChild className="text-xs md:text-sm font-medium hidden sm:flex"><Link href="/login">{t('login')}</Link></Button>
+              <Button size="sm" asChild className="text-xs md:text-sm font-medium"><Link href="/register">{t('register')}</Link></Button>
             </div>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar className="h-9 w-9 cursor-pointer ml-4 border">
+                <Avatar className="h-8 w-8 md:h-9 md:w-9 cursor-pointer ml-2 md:ml-4 border">
                   <AvatarImage src={user.photoURL || ''} />
                   <AvatarFallback>{user.displayName?.charAt(0) || 'U'}</AvatarFallback>
                 </Avatar>
@@ -555,9 +483,22 @@ export default function DashboardPage() {
       </header>
 
       {/* --- MAIN CONTENT --- */}
-      <div className="flex flex-1 overflow-hidden">
-        {sidebarOpen && (
-          <aside className="w-[280px] border-r p-4 shrink-0 overflow-y-auto bg-background flex flex-col gap-6">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* SIDEBAR OVERLAY FOR MOBILE */}
+        {isMobile && sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 transition-opacity" 
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <aside className={cn(
+          "shrink-0 overflow-y-auto bg-background flex flex-col gap-6 z-50 transition-all duration-300",
+          isMobile ? "fixed top-[64px] bottom-0 left-0 w-[280px] p-4 border-r shadow-2xl" : "w-[280px] border-r p-4",
+          isMobile && !sidebarOpen && "-translate-x-full",
+          !isMobile && !sidebarOpen && "hidden"
+        )}>
+          {!isMobile && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 bg-card border shadow-sm px-4 py-3 rounded-full hover:bg-accent transition-all font-medium text-[14px] w-full">
@@ -568,111 +509,100 @@ export default function DashboardPage() {
               <DropdownMenuContent className="w-56">
                 <DropdownMenuItem onClick={() => { setSelectedEvent(null); setActiveTab('Etkinlik'); setIsEventModalOpen(true); }} className="cursor-pointer"><Plus className="w-4 h-4 mr-2" /> {t('event')}</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { setSelectedEvent(null); setActiveTab('Görev'); setIsEventModalOpen(true); }} className="cursor-pointer"><Check className="w-4 h-4 mr-2" /> {t('task')}</DropdownMenuItem>
-                {isTeacher && (
-                  <DropdownMenuItem onClick={() => { setSelectedEvent(null); setActiveTab('Randevu programı'); setIsEventModalOpen(true); }} className="cursor-pointer text-primary font-semibold"><Clock className="w-4 h-4 mr-2" /> {t('appointmentSchedule')}</DropdownMenuItem>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
 
-            {userData?.worldClockEnabled && (
-              <div className="px-1 border-b pb-4">
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2 mb-3">Dünya Saati</h3>
-                <div className="space-y-3 px-2">
-                   <div className="flex justify-between items-center">
-                     <span className="text-xs font-medium">İstanbul</span>
-                     <span className="text-xs font-mono">{format(new Date(), 'HH:mm')}</span>
+          {userData?.worldClockEnabled && (
+            <div className="px-1 border-b pb-4">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2 mb-3">Dünya Saati</h3>
+              <div className="space-y-3 px-2">
+                 <div className="flex justify-between items-center">
+                   <span className="text-xs font-medium">İstanbul</span>
+                   <span className="text-xs font-mono">{format(new Date(), 'HH:mm')}</span>
+                 </div>
+                 {userData?.secondaryTzEnabled && (
+                   <div className="flex justify-between items-center text-muted-foreground">
+                     <span className="text-xs">{userData.secondaryTimezone?.split('/')[1] || 'New York'}</span>
+                     <span className="text-xs font-mono">
+                       {new Date().toLocaleTimeString('tr-TR', { 
+                         timeZone: userData.secondaryTimezone || 'America/New_York', 
+                         hour: '2-digit', 
+                         minute: '2-digit',
+                         hour12: false 
+                       })}
+                     </span>
                    </div>
-                   {userData?.secondaryTzEnabled && (
-                     <div className="flex justify-between items-center text-muted-foreground">
-                       <span className="text-xs">{userData.secondaryTimezone?.split('/')[1] || 'New York'}</span>
-                       <span className="text-xs font-mono">
-                         {new Date().toLocaleTimeString('tr-TR', { 
-                           timeZone: userData.secondaryTimezone || 'America/New_York', 
-                           hour: '2-digit', 
-                           minute: '2-digit',
-                           hour12: false 
-                         })}
-                       </span>
-                     </div>
-                   )}
-                </div>
-              </div>
-            )}
-
-            <div className="px-1">
-              <div className="flex items-center justify-between mb-4 px-2">
-                <h3 className="text-[14px] font-medium capitalize">{format(miniCalendarMonth, 'MMMM yyyy', { locale: currentLocale })}</h3>
-                <div className="flex gap-0.5">
-                  <button onClick={() => setMiniCalendarMonth(subMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronLeft className="w-4 h-4" /></button>
-                  <button onClick={() => setMiniCalendarMonth(addMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronRight className="w-4 h-4" /></button>
-                </div>
-              </div>
-              <div className="grid grid-cols-7 gap-1 text-center text-[11px] mb-2 text-muted-foreground font-medium uppercase">
-                {lang === 'tr' ? ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'].map(d => <div key={d} className="w-8">{d}</div>) : ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => <div key={i} className="w-8">{d}</div>)}
-              </div>
-              <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
-                {miniCalendarDays.map((day, i) => {
-                  const isCurMonth = isSameMonth(day, miniCalendarMonth);
-                  const isDayToday = isToday(day);
-                  const isDaySelected = isSameDay(day, currentDate);
-                  return (
-                    <div key={i} onClick={() => { setCurrentDate(day); setMiniCalendarMonth(day); }}
-                      className={cn("h-8 w-8 flex items-center justify-center rounded-full cursor-pointer transition-all m-auto text-[12px]",
-                        !isCurMonth && "text-muted-foreground/50",
-                        isCurMonth && !isDayToday && !isDaySelected && "hover:bg-accent",
-                        isDayToday && !isDaySelected && "text-primary font-bold",
-                        isDaySelected && "bg-primary text-primary-foreground font-bold"
-                      )}
-                    >
-                      {format(day, 'd')}
-                    </div>
-                  );
-                })}
+                 )}
               </div>
             </div>
+          )}
 
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2 mb-2">{t('myCalendars')}</h3>
-                <div className="space-y-1">
-                  {[
-                    { id: 'personal', label: user?.displayName || t('personal'), color: '#3b82f6' }, 
-                    { id: 'family', label: t('family'), color: '#8b5cf6' }, 
-                    { id: 'booking', label: t('bookings'), color: '#10b981' },
-                    { id: 'birthdays', label: t('birthdays'), color: '#06b6d4' },
-                    { id: 'tasks', label: t('tasks'), color: '#f59e0b' }
-                  ].map(filter => (
-                    <label key={filter.id} className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-accent rounded-md transition-colors">
-                      <Checkbox checked={filters[filter.id as keyof typeof filters] !== false} onCheckedChange={(checked) => setFilters({...filters, [filter.id]: !!checked})} />
-                      <span className="text-[13px] font-medium">{filter.label}</span>
-                    </label>
-                  ))}
-                </div>
+          <div className="px-1">
+            <div className="flex items-center justify-between mb-4 px-2">
+              <h3 className="text-[14px] font-medium capitalize">{format(miniCalendarMonth, 'MMMM yyyy', { locale: currentLocale })}</h3>
+              <div className="flex gap-0.5">
+                <button onClick={() => setMiniCalendarMonth(subMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+                <button onClick={() => setMiniCalendarMonth(addMonths(miniCalendarMonth, 1))} className="p-1.5 hover:bg-accent rounded-full transition-colors"><ChevronRight className="w-4 h-4" /></button>
               </div>
             </div>
-          </aside>
-        )}
+            <div className="grid grid-cols-7 gap-1 text-center text-[11px] mb-2 text-muted-foreground font-medium uppercase">
+              {['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pz'].map(d => <div key={d} className="w-8">{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-y-1 text-center text-xs">
+              {miniCalendarDays.map((day, i) => {
+                const isCurMonth = isSameMonth(day, miniCalendarMonth);
+                const isDayToday = isToday(day);
+                const isDaySelected = isSameDay(day, currentDate);
+                return (
+                  <div key={i} onClick={() => { setCurrentDate(day); setMiniCalendarMonth(day); if(isMobile) setSidebarOpen(false); }}
+                    className={cn("h-8 w-8 flex items-center justify-center rounded-full cursor-pointer transition-all m-auto text-[12px]",
+                      !isCurMonth && "text-muted-foreground/50",
+                      isDayToday && !isDaySelected && "text-primary font-bold",
+                      isDaySelected && "bg-primary text-primary-foreground font-bold"
+                    )}
+                  >
+                    {format(day, 'd')}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2 mb-2">{t('myCalendars')}</h3>
+              <div className="space-y-1">
+                {[
+                  { id: 'personal', label: user?.displayName || t('personal'), color: '#3b82f6' }, 
+                  { id: 'family', label: t('family'), color: '#8b5cf6' }, 
+                  { id: 'booking', label: t('bookings'), color: '#10b981' },
+                ].map(filter => (
+                  <label key={filter.id} className="flex items-center gap-3 px-2 py-1.5 cursor-pointer hover:bg-accent rounded-md transition-colors">
+                    <Checkbox checked={filters[filter.id as keyof typeof filters] !== false} onCheckedChange={(checked) => setFilters({...filters, [filter.id]: !!checked})} />
+                    <span className="text-[13px] font-medium">{filter.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </aside>
 
         <main className="flex-1 flex flex-col overflow-hidden">
           {isClient && (view === 'hafta' || view === 'gün') && (
             <div className="flex pr-[15px] shrink-0 border-b bg-background/50 sticky top-0 z-20">
-              <div className="w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-2">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
-                  {isClient ? `GMT${format(currentDate, 'X')}` : 'GMT'}
+              <div className="w-[48px] md:w-[64px] shrink-0 border-r flex flex-col items-center justify-end pb-2">
+                <span className="text-[9px] md:text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">
+                  GMT{isClient ? format(new Date(), 'X') : ''}
                 </span>
               </div>
               <div className={cn("flex-1 grid", view === 'hafta' ? `grid-cols-${weekDays.length}` : 'grid-cols-1')}>
                 {weekDays.map((day, i) => (
-                    <div key={i} className="flex flex-col items-center justify-center py-4 gap-1">
-                      <div className="flex flex-col items-center">
-                        <span className={cn("text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
-                        <div className={cn("w-[46px] h-[46px] flex items-center justify-center rounded-full transition-colors mt-1", isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}>
-                          <span className="text-[24px] font-medium">{format(day, 'd')}</span>
-                        </div>
+                    <div key={i} className="flex flex-col items-center justify-center py-2 md:py-4 gap-0.5 md:gap-1">
+                      <span className={cn("text-[9px] md:text-[11px] font-bold tracking-widest uppercase", isToday(day) ? 'text-primary' : 'text-muted-foreground')}>{format(day, 'eee', { locale: currentLocale })}</span>
+                      <div className={cn("w-8 h-8 md:w-11 md:h-11 flex items-center justify-center rounded-full transition-colors", isToday(day) ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}>
+                        <span className="text-lg md:text-2xl font-medium">{format(day, 'd')}</span>
                       </div>
-                      {userData?.showWeekNumbers && i === 0 && (
-                        <span className="text-[9px] text-muted-foreground absolute top-2 left-2">H{getWeek(day)}</span>
-                      )}
                     </div>
                 ))}
               </div>
@@ -681,24 +611,24 @@ export default function DashboardPage() {
 
           <div className="flex-1 overflow-y-auto relative" ref={gridScrollRef}>
             {view === 'ay' ? (
-              <div className="flex flex-col h-full min-h-[600px]">
+              <div className="flex flex-col h-full min-h-[500px]">
                 <div className="grid grid-cols-7 border-b border-l bg-background sticky top-0 z-10">
-                  {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map(d => (
-                    <div key={d} className="py-2 text-center text-[11px] font-bold text-muted-foreground border-r uppercase tracking-wider">{d}</div>
+                  {['Pt', 'Sl', 'Çr', 'Pr', 'Cm', 'Ct', 'Pz'].map(d => (
+                    <div key={d} className="py-1 md:py-2 text-center text-[10px] md:text-[11px] font-bold text-muted-foreground border-r uppercase">{d}</div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 flex-1 border-l">
                   {monthDays.map((day, i) => {
                     const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day));
                     return (
-                      <div key={`month-day-${i}`} className={cn("border-r border-b p-2 hover:bg-accent/50 transition-colors cursor-pointer flex flex-col items-end min-h-[120px]", !isSameMonth(day, currentDate) && "opacity-30")} onClick={() => handleDateSelect(day, 9)}>
-                        <div className={cn("text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full", isToday(day) ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{format(day, 'd')}</div>
-                        <div className="w-full space-y-1 overflow-hidden">
-                          {dayEvents.slice(0, 3).map((event: any) => (
-                            <div key={event.id || event.uniqueId} className="text-[10px] px-1.5 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>{event.title}</div>
+                      <div key={i} className={cn("border-r border-b p-1 md:p-2 flex flex-col items-end min-h-[80px] md:min-h-[120px]", !isSameMonth(day, currentDate) && "opacity-30")} onClick={() => handleDateSelect(day, 9)}>
+                        <div className={cn("text-[10px] md:text-xs font-semibold mb-1 w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full", isToday(day) ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{format(day, 'd')}</div>
+                        <div className="w-full space-y-0.5 md:space-y-1 overflow-hidden">
+                          {dayEvents.slice(0, isMobile ? 2 : 3).map((event: any) => (
+                            <div key={event.id} className="text-[9px] md:text-[10px] px-1 py-0.5 rounded text-white truncate font-medium" style={{ backgroundColor: event.color }}>{event.title}</div>
                           ))}
-                          {dayEvents.length > 3 && (
-                            <div className="text-[10px] text-muted-foreground pl-1 font-medium">+{dayEvents.length - 3} daha</div>
+                          {dayEvents.length > (isMobile ? 2 : 3) && (
+                            <div className="text-[9px] text-muted-foreground pl-1">+{dayEvents.length - (isMobile ? 2 : 3)}</div>
                           )}
                         </div>
                       </div>
@@ -706,51 +636,14 @@ export default function DashboardPage() {
                   })}
                 </div>
               </div>
-            ) : view === 'plan' ? (
-              <div className="p-8 max-w-4xl mx-auto space-y-8">
-                <h1 className="text-2xl font-bold border-b pb-4">{t('schedule')}</h1>
-                {combinedEvents.length === 0 ? (
-                  <div className="text-center py-20 text-muted-foreground">{t('noEvents')}</div>
-                ) : (
-                  <div className="space-y-4">
-                    {combinedEvents.map((event: any) => (
-                      <div key={event.id || event.uniqueId} className="flex gap-4 p-4 border rounded-lg hover:bg-accent transition-colors cursor-pointer" onClick={() => handleEventClick(event)}>
-                        <div className="w-1 rounded-full" style={{ backgroundColor: event.color }} />
-                        <div className="flex-1">
-                          <h4 className="font-semibold">{event.title}</h4>
-                          <p className="text-sm text-muted-foreground">{format(parseISO(event.start), 'd MMMM yyyy HH:mm', { locale: currentLocale })}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             ) : (
               <div className="flex relative h-[1920px]">
-                <div className={cn("w-[64px] shrink-0 border-r flex", userData?.secondaryTzEnabled && "w-[128px]")}>
-                  <div className="flex-1">
-                    {hours.map((hour, i) => (
-                      <div key={i} className="h-[80px] relative">
-                        <span className="absolute -top-[7px] right-2 text-[11px] text-muted-foreground font-medium">{format(setMinutes(setHours(new Date(), hour), 0), timeFormatStr, { locale: currentLocale })}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {userData?.secondaryTzEnabled && (
-                    <div className="flex-1 border-l bg-accent/10">
-                      {hours.map((hour, i) => (
-                        <div key={i} className="h-[80px] relative">
-                          <span className="absolute -top-[7px] right-2 text-[11px] text-primary/60 font-medium">
-                            {new Date().toLocaleTimeString('tr-TR', { 
-                              timeZone: userData.secondaryTimezone || 'America/New_York',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              hour12: userData.timeFormat === '12'
-                            })}
-                          </span>
-                        </div>
-                      ))}
+                <div className="w-[48px] md:w-[64px] shrink-0 border-r">
+                  {hours.map((hour, i) => (
+                    <div key={i} className="h-[80px] relative">
+                      <span className="absolute -top-[7px] right-1 md:right-2 text-[10px] md:text-[11px] text-muted-foreground font-medium">{format(setMinutes(setHours(new Date(), hour), 0), timeFormatStr, { locale: currentLocale })}</span>
                     </div>
-                  )}
+                  ))}
                 </div>
 
                 <div className="flex-1 relative border-t grid" style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}>
@@ -761,24 +654,22 @@ export default function DashboardPage() {
                   {weekDays.map((day, i) => {
                     const dayEvents = combinedEvents.filter(e => isSameDay(parseISO(e.start), day));
                     return (
-                      <div key={i} className={cn("relative border-r cursor-pointer hover:bg-accent/20 transition-colors", isToday(day) && "bg-primary/5")} onClick={(e) => { if (e.target === e.currentTarget) { const rect = e.currentTarget.getBoundingClientRect(); const y = e.clientY - rect.top; handleDateSelect(day, Math.floor(y / 80)); }}}>
+                      <div key={i} className={cn("relative border-r cursor-pointer", isToday(day) && "bg-primary/5")} onClick={(e) => { if (e.target === e.currentTarget) { const rect = e.currentTarget.getBoundingClientRect(); const y = e.clientY - rect.top; handleDateSelect(day, Math.floor(y / 80)); }}}>
                         {isToday(day) && (
                           <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: `${(currentTime.getHours()) * 80 + (currentTime.getMinutes() / 60) * 80}px` }}>
-                            <div className="h-[2px] bg-destructive w-full relative"><div className="w-3 h-3 bg-destructive rounded-full absolute -top-[5px] -left-[6px] shadow-sm"></div></div>
+                            <div className="h-[2px] bg-destructive w-full relative"><div className="w-2 h-2 md:w-3 md:h-3 bg-destructive rounded-full absolute -top-[3px] md:-top-[5px] -left-[4px] md:-left-[6px]"></div></div>
                           </div>
                         )}
                         {dayEvents.map((event: any) => {
                           const start = parseISO(event.start); const end = parseISO(event.end);
                           const top = (start.getHours()) * 80 + (start.getMinutes() / 60) * 80;
                           const height = (differenceInMinutes(end, start) / 60) * 80;
-                          const isPast = userData?.dimPastEvents && isBefore(end, new Date());
                           return (
-                            <div key={event.id || event.uniqueId} className={cn("absolute left-1 right-1 rounded-[4px] px-2 py-1 shadow-md border text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden", isPast && "opacity-40 grayscale-[0.3]")}
-                              style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color, borderColor: 'rgba(0,0,0,0.1)' }}
+                            <div key={event.id} className={cn("absolute left-0.5 right-0.5 rounded-[4px] px-1 md:px-2 py-0.5 md:py-1 shadow-sm border text-[9px] md:text-[11px] font-semibold text-white transition-all hover:brightness-110 z-10 overflow-hidden")}
+                              style={{ top: `${top}px`, height: `${Math.max(height, 24)}px`, backgroundColor: event.color }}
                               onClick={(e) => { e.stopPropagation(); handleEventClick(event); }}
                             >
                               <div className="truncate">{event.title}</div>
-                              {height > 36 && <div className="opacity-80 text-[10px]">{format(start, timeFormatStr)} - {format(end, timeFormatStr)}</div>}
                             </div>
                           );
                         })}
@@ -792,7 +683,54 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* --- SETTINGS MODAL --- */}
+      {/* MOBILE FAB */}
+      {isMobile && (
+        <button 
+          onClick={() => { setSelectedEvent(null); setActiveTab('Etkinlik'); setIsEventModalOpen(true); }}
+          className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-2xl flex items-center justify-center z-50 hover:scale-110 transition-transform active:scale-95"
+        >
+          <Plus className="w-8 h-8" />
+        </button>
+      )}
+
+      {/* --- MODALS --- */}
+      <Dialog open={isEventModalOpen} onOpenChange={setIsEventModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>{selectedEvent ? 'Etkinliği Düzenle' : 'Yeni Etkinlik'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Başlık</Label>
+              <Input placeholder="Başlık ekle" value={eventForm.title} onChange={(e) => setEventForm({...eventForm, title: e.target.value})} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Başlangıç</Label>
+                <Input type="datetime-local" value={eventForm.start} onChange={(e) => setEventForm({...eventForm, start: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Bitiş</Label>
+                <Input type="datetime-local" value={eventForm.end} onChange={(e) => setEventForm({...eventForm, end: e.target.value})} />
+              </div>
+            </div>
+            <div className="flex justify-between gap-2 pt-4">
+              {selectedEvent && (
+                <Button variant="destructive" onClick={async () => {
+                  await deleteDoc(doc(db, 'users', user?.uid!, 'events', selectedEvent.id));
+                  setIsEventModalOpen(false);
+                  toast({title: 'Silindi'});
+                }}>Sil</Button>
+              )}
+              <div className="flex gap-2 ml-auto">
+                <Button variant="outline" onClick={() => setIsEventModalOpen(false)}>İptal</Button>
+                <Button onClick={handleSaveEvent}>Kaydet</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-full h-full p-0 m-0 border-none rounded-none bg-background text-foreground flex flex-col overflow-hidden">
           <VisuallyHidden><DialogTitle>{t('settings')}</DialogTitle></VisuallyHidden>
@@ -806,9 +744,8 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- INFO / AI HELPER MODAL --- */}
       <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
-        <DialogContent className="sm:max-w-[500px] h-[600px] p-0 flex flex-col overflow-hidden">
+        <DialogContent className="sm:max-w-[500px] h-[80vh] sm:h-[600px] p-0 flex flex-col overflow-hidden">
           <VisuallyHidden><DialogTitle>{t('assistant')}</DialogTitle></VisuallyHidden>
           <div className="p-4 border-b bg-accent/50 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -824,7 +761,7 @@ export default function DashboardPage() {
               </div>
             ))}
             {currentlyTyping && (
-              <div className="max-w-[85%] p-3 rounded-2xl text-sm bg-accent text-foreground mr-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="max-w-[85%] p-3 rounded-2xl text-sm bg-accent text-foreground mr-auto">
                 {currentlyTyping}
               </div>
             )}
@@ -845,26 +782,14 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* --- QR MODAL --- */}
       <Dialog open={isQrModalOpen} onOpenChange={setIsQrModalOpen}>
-        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden">
-          <VisuallyHidden><DialogTitle>{t('qrCode')}</DialogTitle></VisuallyHidden>
-          <div className="p-4 border-b bg-accent/50 flex items-center justify-between">
-            <h2 className="font-semibold">{t('qrCode')}</h2>
-            <button onClick={() => setIsQrModalOpen(false)} className="p-1 hover:bg-accent rounded-full"><X className="w-5 h-5" /></button>
-          </div>
-          <div className="flex flex-col items-center gap-6 py-10 px-6">
-            <div className="p-4 bg-white rounded-2xl shadow-2xl">
-              {isClient && (
-                <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={220} level="H" includeMargin={true} />
-              )}
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader><DialogTitle>{t('qrCode')}</DialogTitle></DialogHeader>
+          <div className="flex flex-col items-center gap-6 py-6">
+            <div className="p-4 bg-white rounded-2xl shadow-xl">
+              {isClient && <QRCodeSVG value={`${window.location.origin}/book/${user?.uid}/default`} size={200} level="H" />}
             </div>
-            <div className="text-center space-y-3 w-full">
-              <div className="flex items-center gap-2 bg-accent p-2 rounded-lg border w-full">
-                <input readOnly value={isClient ? `${window.location.origin}/book/${user?.uid}/default` : ''} className="bg-transparent text-xs text-primary flex-1 outline-none truncate" />
-                <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/book/${user?.uid}/default`); toast({title: t('copyLink')}); }} className="p-1.5 hover:bg-accent rounded transition-colors"><LinkIcon className="w-4 h-4" /></button>
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground text-center">Öğrencileriniz bu kodu taratarak randevu alabilir.</p>
           </div>
         </DialogContent>
       </Dialog>
